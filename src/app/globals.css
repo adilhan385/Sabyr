@@ -1,0 +1,259 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* SABYR Color System — Light Mode */
+  --background: 0 0% 98%;
+  --foreground: 0 0% 4%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 4%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 4%;
+
+  /* Primary — Black */
+  --primary: 0 0% 4%;
+  --primary-foreground: 0 0% 98%;
+
+  /* Secondary — Light gray */
+  --secondary: 0 0% 94%;
+  --secondary-foreground: 0 0% 4%;
+
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 45%;
+
+  /* Accent — Warm gold */
+  --accent: 42 57% 54%;
+  --accent-foreground: 0 0% 4%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 0 0% 88%;
+  --input: 0 0% 88%;
+  --ring: 0 0% 4%;
+
+  --radius: 0.25rem;
+}
+
+.dark {
+  /* SABYR Color System — Dark Mode */
+  --background: 0 0% 4%;
+  --foreground: 0 0% 98%;
+
+  --card: 0 0% 6%;
+  --card-foreground: 0 0% 98%;
+
+  --popover: 0 0% 6%;
+  --popover-foreground: 0 0% 98%;
+
+  --primary: 0 0% 98%;
+  --primary-foreground: 0 0% 4%;
+
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 0 0% 12%;
+  --muted-foreground: 0 0% 60%;
+
+  --accent: 42 57% 54%;
+  --accent-foreground: 0 0% 4%;
+
+  --destructive: 0 62% 50%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 0 0% 14%;
+  --input: 0 0% 14%;
+  --ring: 0 0% 98%;
+}
+
+/* ==================== BASE STYLES ==================== */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ==================== TYPOGRAPHY ==================== */
+
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+/* ==================== SCROLLBAR ==================== */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* ==================== UTILITIES ==================== */
+
+.container {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding: 0 2.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container {
+    padding: 0 4rem;
+  }
+}
+
+/* Product image hover effect */
+.product-image-hover {
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.product-image-hover:hover {
+  transform: scale(1.03);
+}
+
+/* Smooth underline animation */
+.link-underline {
+  position: relative;
+}
+
+.link-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: currentColor;
+  transition: width 0.3s ease;
+}
+
+.link-underline:hover::after {
+  width: 100%;
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--border)) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ==================== MOBILE FIXES ==================== */
+
+/* Prevent zoom on input focus on iOS */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area for mobile */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ==================== CUSTOM COMPONENTS ==================== */
+
+/* Fashion grid */
+.fashion-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .fashion-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .fashion-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+}
+
+/* Aspect ratio for product cards */
+.product-aspect {
+  aspect-ratio: 3 / 4;
+}
+
+/* Club gold gradient */
+.club-gradient {
+  background: linear-gradient(135deg, #C9A84C 0%, #F2D592 50%, #C9A84C 100%);
+}
+
+/* AI gradient */
+.ai-gradient {
+  background: linear-gradient(135deg, #0A0A0A 0%, #3D3D3D 100%);
+}

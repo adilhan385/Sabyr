@@ -5,7 +5,7 @@ import { getLiveCatalogProducts } from "@/lib/productsStore";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { getSession } from "@/lib/auth";
 import { prisma, isDatabaseAvailable } from "@/lib/db";
-import { ProductItem } from "@/data/products";
+import { ProductItem } from "@/data/mockData";
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ const StylistRequestSchema = z.object({
   query: z.string().max(500).optional(),
 });
 
-export interface CuratedOutfit {
+interface CuratedOutfit {
   id: string;
   rank: number;
   title: string;

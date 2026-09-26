@@ -3,8 +3,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCartStore } from "@/store/useCartStore";
-import { ProductItem } from "@/data/products";
+import { useCartStore } from "@/store/cart";
+import { PRODUCTS, ProductItem } from "@/data/mockData";
+import { useSabySession } from "@/hooks/useSabySession";
+import { formatPrice } from "@/lib/utils";
 
 interface AppearanceProfile {
   colorType: string;
@@ -78,7 +80,8 @@ function analyzePhotoMetricsClient(
 
 export default function AIStylistPage() {
   const router = useRouter();
-  const [catalogProducts, setCatalogProducts] = useState<ProductItem[]>([]);
+  const { user, isLoading: isSessionLoading } = useSabySession();
+  const [catalogProducts, setCatalogProducts] = useState<ProductItem[]>(PRODUCTS);
   const [selectedSize, setSelectedSize] = useState("M");
 
   // User photo & camera state
@@ -94,14 +97,18 @@ export default function AIStylistPage() {
   const [addedOutfitId, setAddedOutfitId] = useState<string | null>(null);
 
   // Club access lock state
-  const [accessChecked, setAccessChecked] = useState(false);
-  const [hasClubAccess, setHasClubAccess] = useState(false);
-  const [clubPrice, setClubPrice] = useState(150000);
+  const [aiClubOnly, setAiClubOnly] = useState(true);
+  const [clubPrice, setClubPrice] = useState(25000);
+  const [clubMonthlyPrice, setClubMonthlyPrice] = useState(4900);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const addItem = useCartStore((state) => state.addItem);
   const openCart = useCartStore((state) => state.openCart);
+
+  const hasClubAccess = Boolean(
+    !aiClubOnly || user?.clubMembership?.isActive || user?.role === "ADMIN"
+  );
 
   const runPhotoStylistAnalysis = useCallback(async (photoBase64: string) => {
     setIsAnalyzing(true);
@@ -131,36 +138,43 @@ export default function AIStylistPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/auth/me").then((r) => r.json()).catch(() => ({ user: null })),
-      fetch("/api/club").then((r) => r.json()).catch(() => ({ settings: {} })),
-      fetch("/api/products").then((r) => r.json()).catch(() => ({ products: [] })),
-    ]).then(([authData, clubData, prodData]) => {
-      const user = authData?.user;
-      const aiClubOnly = clubData?.settings?.ai_club_only !== "false";
-      if (clubData?.settings?.annual_price) {
-        setClubPrice(Number(clubData.settings.annual_price));
+      fetch("/api/admin/settings").then((r) => r.json()).catch(() => null),
+      fetch("/api/products").then((r) => r.json()).catch(() => null),
+    ]).then(([settingsData, prodData]) => {
+      if (settingsData?.club) {
+        if (settingsData.club.annual_price) {
+          setClubPrice(Number(settingsData.club.annual_price));
+        }
+        if (settingsData.club.monthly_price) {
+          setClubMonthlyPrice(Number(settingsData.club.monthly_price));
+        }
+        if (settingsData.club.ai_club_only === "false") {
+          setAiClubOnly(false);
+        } else {
+          setAiClubOnly(true);
+        }
       }
-      const allowed = Boolean(!aiClubOnly || (user && (user.isClubMember || user.role === "ADMIN")));
-      setHasClubAccess(allowed);
-      setAccessChecked(true);
 
       if (prodData?.products?.length > 0) {
         setCatalogProducts(prodData.products);
       }
-
-      if (allowed) {
-        try {
-          const savedPhoto = sessionStorage.getItem("sabyr_user_photo");
-          if (savedPhoto) {
-            setUserPhoto(savedPhoto);
-            runPhotoStylistAnalysis(savedPhoto);
-          }
-        } catch {
-          // ignore
-        }
-      }
     });
-  }, [runPhotoStylistAnalysis]);
+  }, []);
+
+  // Auto-analyze saved photo if user has club access
+  useEffect(() => {
+    if (!isSessionLoading && hasClubAccess) {
+      try {
+        const savedPhoto = sessionStorage.getItem("sabyr_user_photo");
+        if (savedPhoto && !userPhoto) {
+          setUserPhoto(savedPhoto);
+          runPhotoStylistAnalysis(savedPhoto);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [isSessionLoading, hasClubAccess, userPhoto, runPhotoStylistAnalysis]);
 
   // Stop camera on unmount
   useEffect(() => {
@@ -266,13 +280,16 @@ export default function AIStylistPage() {
 
   const handleAddOutfitToCart = (outfit: CuratedOutfit) => {
     outfit.items.forEach((product) => {
+      const variant =
+        product.variants.find((v) => v.size === selectedSize) || product.variants[0];
       addItem({
+        id: `${product.id}-${selectedSize}`,
         productId: product.id,
-        variantId: `${product.id}-${selectedSize}`,
+        variantId: variant?.id || `${product.id}-${selectedSize}`,
         name: product.name,
         price: product.price,
         size: selectedSize,
-        color: product.variants[0]?.color || "Стандарт",
+        color: variant?.color || "Стандарт",
         image: product.images[0],
         slug: product.slug,
         quantity: 1,
@@ -315,49 +332,61 @@ export default function AIStylistPage() {
     );
   };
 
-  if (!accessChecked) {
+  if (isSessionLoading) {
     return (
-      <div className="min-h-screen bg-[#FAF8F5] pt-24 pb-20 flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#0A0A0A] pt-24 pb-20 flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-[#C9A84C] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!hasClubAccess) {
     return (
-      <div className="min-h-screen bg-[#FAF8F5] pt-28 pb-20 px-4 flex items-center justify-center">
-        <div className="max-w-xl w-full bg-[#121212] text-[#F7F5F0] p-8 md:p-12 border border-[#C5A059]/40 shadow-2xl text-center">
-          <span className="inline-block text-[10px] uppercase tracking-[0.3em] text-[#C5A059] border border-[#C5A059]/40 px-3 py-1 mb-5">
-            Привилегия SABYR CLUB
-          </span>
-          <h1 className="font-serif text-3xl md:text-4xl mb-4">
-            Персональный AI-Стилист по фото закрыт
-          </h1>
-          <p className="text-sm text-[#A09C94] leading-relaxed mb-8">
-            Мгновенный подбор топ-образов по вашей фотографии без анкет и опросов доступен только
-            резидентам закрытого клуба SABYR CLUB.
+      <div className="min-h-screen bg-[#0A0A0A] text-[#F5F0EB] pt-24 pb-20 flex items-center justify-center px-6">
+        <div className="max-w-xl w-full bg-[#111111] border border-[#C9A84C]/30 p-8 md:p-12 text-center">
+          <p className="text-[11px] uppercase tracking-[0.35em] text-[#C9A84C] mb-4">
+            SABYR CLUB EXCLUSIVE
           </p>
-          <div className="bg-[#1A1A1A] border border-[#2C2C2C] p-5 mb-8 text-left space-y-2 text-xs text-[#D5D0C5]">
-            <p className="text-[#C5A059] uppercase tracking-widest text-[10px] font-medium mb-2">
-              Что открывает статус резидента ({clubPrice.toLocaleString("ru-KZ")} ₸ / год):
-            </p>
-            <p>— Автоматический подбор 3 лучших образов из всей коллекции по одному вашему селфи</p>
-            <p>— 3D AI-Примерочная с одеванием вещей прямо на ваше фото</p>
-            <p>— Доступ к лимитированным костюмам и закрытым дропам SABYR</p>
+          <h1
+            className="text-3xl md:text-4xl font-light mb-4"
+            style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+          >
+            AI-Стилист по фото доступен только участникам SABYR CLUB
+          </h1>
+          <p className="text-sm text-[#8A8279] leading-relaxed mb-8">
+            Сфотографируйте себя — и искусственный интеллект без анкет и опросов подберёт 3 лучших
+            готовых образа из всей коллекции SABYR под ваш типаж. Доступ открыт только резидентам
+            закрытого клуба.
+          </p>
+
+          <div className="bg-[#0A0A0A] border border-[#222222] p-5 mb-8 text-left space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#8A8279] uppercase tracking-widest">Месячный доступ</span>
+              <span className="text-[#F5F0EB] font-medium">
+                {formatPrice(clubMonthlyPrice)} / мес
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs pt-2 border-t border-[#1A1A1A]">
+              <span className="text-[#8A8279] uppercase tracking-widest">Годовое членство</span>
+              <span className="text-[#C9A84C] font-medium">{formatPrice(clubPrice)} / год</span>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+
+          <div className="flex flex-col sm:flex-row gap-3">
             <Link
               href="/club"
-              className="px-8 py-4 bg-[#C5A059] text-[#121212] text-xs uppercase tracking-[0.2em] font-medium hover:bg-[#d4b06a] transition-colors"
+              className="flex-1 py-4 bg-[#C9A84C] text-[#0A0A0A] text-xs font-semibold uppercase tracking-[0.2em] hover:bg-[#E2C56D] transition-colors text-center"
             >
               Вступить в SABYR CLUB
             </Link>
-            <Link
-              href="/login"
-              className="px-8 py-4 border border-[#3A3A3A] text-[#F7F5F0] text-xs uppercase tracking-[0.2em] hover:border-[#C5A059] transition-colors"
-            >
-              Войти в аккаунт
-            </Link>
+            {!user && (
+              <Link
+                href="/account"
+                className="flex-1 py-4 border border-[#333333] text-[#F5F0EB] text-xs uppercase tracking-[0.2em] hover:border-[#C9A84C] transition-colors text-center"
+              >
+                Войти в аккаунт
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -365,30 +394,32 @@ export default function AIStylistPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] pt-24 pb-20">
+    <div className="min-h-screen bg-[#0A0A0A] text-[#F5F0EB] pt-24 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#1A1A1A] text-[#F7F5F0] text-[10px] tracking-[0.25em] uppercase mb-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />
-            SABYR AI Vision Stylist
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-[#C9A84C]/40 bg-[#C9A84C]/10 text-[#C9A84C] text-[10px] tracking-[0.25em] uppercase mb-4">
+            SABYR AI Vision Stylist — Без анкет, по вашему фото
           </div>
-          <h1 className="font-serif text-3xl md:text-5xl text-[#1A1A1A] tracking-tight mb-3">
+          <h1
+            className="text-3xl md:text-5xl font-light text-[#F5F0EB] tracking-tight mb-3"
+            style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+          >
             Сфотографируйтесь — AI сам подберёт вам топ-образы
           </h1>
-          <p className="text-[#6E6A63] text-sm md:text-base leading-relaxed">
-            Никаких анкет и сложных вопросов. Просто сделайте фото с камеры или загрузите снимок:
-            искусственный интеллект определит ваш типаж, контрастность и соберёт 3 лучших образа из
+          <p className="text-[#8A8279] text-sm md:text-base leading-relaxed">
+            Никаких вопросов и ручного выбора. Сделайте селфи с камеры или загрузите своё фото:
+            нейросеть определит ваш цветотип, контрастность и соберёт 3 лучших готовых образа из
             всей коллекции SABYR.
           </p>
         </div>
 
         {/* PHOTO CAPTURE & APPEARANCE ANALYSIS PANEL */}
-        <div className="bg-white border border-[#E8E3DA] p-6 md:p-10 mb-12 shadow-sm">
+        <div className="bg-[#111111] border border-[#222222] p-6 md:p-10 mb-12">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Left: Camera / Photo Box (5 cols) */}
             <div className="lg:col-span-5">
-              <div className="relative aspect-[3/4] w-full max-w-md mx-auto bg-[#141414] border border-[#E8E3DA] overflow-hidden">
+              <div className="relative aspect-[3/4] w-full max-w-md mx-auto bg-[#0D0D0D] border border-[#2A2A2A] overflow-hidden">
                 {/* Live Camera Stream */}
                 {cameraActive && (
                   <div className="relative w-full h-full">
@@ -400,15 +431,15 @@ export default function AIStylistPage() {
                       className="w-full h-full object-cover scale-x-[-1]"
                     />
                     <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                      <div className="w-28 h-36 rounded-full border-2 border-dashed border-[#C5A059]/80 mb-3" />
-                      <span className="px-3 py-1 bg-black/75 text-[#F7F5F0] text-[10px] uppercase tracking-widest">
+                      <div className="w-28 h-36 rounded-full border-2 border-dashed border-[#C9A84C]/80 mb-3" />
+                      <span className="px-3 py-1 bg-black/75 text-[#F5F0EB] text-[10px] uppercase tracking-widest">
                         Смотрите в камеру при хорошем освещении
                       </span>
                     </div>
 
                     {cameraCountdown !== null && (
                       <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
-                        <span className="font-serif text-7xl text-white font-bold">
+                        <span className="font-serif text-7xl text-[#C9A84C] font-bold">
                           {cameraCountdown}
                         </span>
                       </div>
@@ -418,7 +449,7 @@ export default function AIStylistPage() {
                       <button
                         type="button"
                         onClick={() => captureFromCamera(false)}
-                        className="px-6 py-3 bg-[#C5A059] text-[#121212] text-xs uppercase tracking-widest font-medium hover:bg-[#d4b06a]"
+                        className="px-6 py-3 bg-[#C9A84C] text-[#0A0A0A] text-xs uppercase tracking-widest font-semibold hover:bg-[#E2C56D]"
                       >
                         Сфоткаться
                       </button>
@@ -432,7 +463,7 @@ export default function AIStylistPage() {
                       <button
                         type="button"
                         onClick={stopCamera}
-                        className="px-3 py-3 bg-red-800/90 text-white text-xs uppercase tracking-widest"
+                        className="px-3 py-3 bg-red-900/90 text-white text-xs uppercase tracking-widest"
                       >
                         Отмена
                       </button>
@@ -448,16 +479,19 @@ export default function AIStylistPage() {
                       alt="Ваше фото для AI-стилиста"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-3 left-3 bg-[#121212]/85 text-[#C5A059] px-3 py-1.5 text-[10px] uppercase tracking-widest">
-                      Фото проанализировано AI
+                    <div className="absolute top-3 left-3 bg-[#0A0A0A]/90 border border-[#C9A84C]/40 text-[#C9A84C] px-3 py-1.5 text-[10px] uppercase tracking-widest">
+                      Ваше фото проанализировано AI
                     </div>
                     {isAnalyzing && (
-                      <div className="absolute inset-0 bg-[#121212]/75 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center">
-                        <div className="w-12 h-12 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin mb-4" />
-                        <p className="font-serif text-xl mb-1">
+                      <div className="absolute inset-0 bg-[#0A0A0A]/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center">
+                        <div className="w-12 h-12 border-2 border-[#C9A84C] border-t-transparent rounded-full animate-spin mb-4" />
+                        <p
+                          className="text-xl mb-1"
+                          style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+                        >
                           AI анализирует ваш типаж и подбирает одежду...
                         </p>
-                        <p className="text-xs text-[#C5A059] uppercase tracking-widest">
+                        <p className="text-xs text-[#C9A84C] uppercase tracking-widest">
                           Сканирование всех капсул каталога SABYR
                         </p>
                       </div>
@@ -467,14 +501,17 @@ export default function AIStylistPage() {
 
                 {/* Empty State */}
                 {!cameraActive && !userPhoto && (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 bg-[#FAF8F5]">
-                    <div className="w-20 h-20 border border-[#C5A059] flex items-center justify-center mb-5 text-xs uppercase tracking-widest text-[#C5A059]">
+                  <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 bg-[#0D0D0D]">
+                    <div className="w-20 h-20 border border-[#C9A84C]/50 flex items-center justify-center mb-5 text-xs uppercase tracking-widest text-[#C9A84C]">
                       AI SCAN
                     </div>
-                    <h3 className="font-serif text-2xl text-[#1A1A1A] mb-2">
+                    <h3
+                      className="text-2xl text-[#F5F0EB] mb-2"
+                      style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+                    >
                       Сделайте селфи или загрузите фото
                     </h3>
-                    <p className="text-xs text-[#6E6A63] max-w-xs mb-6 leading-relaxed">
+                    <p className="text-xs text-[#8A8279] max-w-xs mb-6 leading-relaxed">
                       Вам не нужно ничего выбирать вручную — AI сам оценит ваш цветотип и соберёт
                       лучшие комплекты из всех костюмов, рубашек, поло и брюк SABYR.
                     </p>
@@ -482,14 +519,14 @@ export default function AIStylistPage() {
                       <button
                         type="button"
                         onClick={startCamera}
-                        className="w-full py-4 bg-[#1A1A1A] text-white text-xs uppercase tracking-[0.2em] font-medium hover:bg-[#333] transition-colors"
+                        className="w-full py-4 bg-[#C9A84C] text-[#0A0A0A] text-xs uppercase tracking-[0.2em] font-semibold hover:bg-[#E2C56D] transition-colors"
                       >
                         Включить камеру и сфоткаться
                       </button>
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full py-4 border border-[#1A1A1A] text-[#1A1A1A] text-xs uppercase tracking-[0.2em] hover:bg-white transition-colors"
+                        className="w-full py-4 border border-[#333333] text-[#F5F0EB] text-xs uppercase tracking-[0.2em] hover:border-[#C9A84C] transition-colors"
                       >
                         Загрузить готовое фото
                       </button>
@@ -507,7 +544,7 @@ export default function AIStylistPage() {
               />
 
               {cameraError && (
-                <div className="mt-3 p-3 bg-amber-50 border border-amber-300 text-xs text-amber-900">
+                <div className="mt-3 p-3 bg-red-950/60 border border-red-700/50 text-xs text-red-200">
                   {cameraError}
                 </div>
               )}
@@ -515,15 +552,18 @@ export default function AIStylistPage() {
 
             {/* Right: AI Appearance Profile & Action Controls (7 cols) */}
             <div className="lg:col-span-7 space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#E8E3DA]">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#222222]">
                 <div>
-                  <span className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] block mb-1">
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-[#C9A84C] block mb-1">
                     Персональное досье стиля
                   </span>
-                  <h2 className="font-serif text-2xl md:text-3xl text-[#1A1A1A]">
+                  <h2
+                    className="text-2xl md:text-3xl text-[#F5F0EB]"
+                    style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+                  >
                     {appearanceProfile
                       ? "Результаты AI-сканирования вашей внешности"
-                      : "Ожидание вашей фотографии"}
+                      : "Сделайте фото для автоматического подбора образов"}
                   </h2>
                 </div>
 
@@ -532,14 +572,14 @@ export default function AIStylistPage() {
                     <button
                       type="button"
                       onClick={startCamera}
-                      className="px-4 py-2.5 bg-[#1A1A1A] text-white text-xs uppercase tracking-widest hover:bg-[#333]"
+                      className="px-4 py-2.5 bg-[#C9A84C] text-[#0A0A0A] text-xs uppercase tracking-widest font-semibold hover:bg-[#E2C56D]"
                     >
                       Переснять с камеры
                     </button>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2.5 border border-[#1A1A1A] text-[#1A1A1A] text-xs uppercase tracking-widest hover:bg-[#FAF8F5]"
+                      className="px-4 py-2.5 border border-[#333333] text-[#F5F0EB] text-xs uppercase tracking-widest hover:border-[#C9A84C]"
                     >
                       Другое фото
                     </button>
@@ -549,54 +589,61 @@ export default function AIStylistPage() {
 
               {appearanceProfile ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-[#FAF8F5] border border-[#E8E3DA] p-5">
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#8C857B] block mb-1">
+                  <div className="bg-[#0A0A0A] border border-[#222222] p-5">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#C9A84C] block mb-1">
                       Определённый типаж
                     </span>
-                    <p className="font-serif text-lg text-[#1A1A1A] mb-1">
+                    <p
+                      className="text-lg text-[#F5F0EB] mb-1"
+                      style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+                    >
                       {appearanceProfile.colorType}
                     </p>
-                    <p className="text-xs text-[#6E6A63] leading-relaxed">
+                    <p className="text-xs text-[#8A8279] leading-relaxed">
                       {appearanceProfile.contrastLevel}
                     </p>
                   </div>
 
-                  <div className="bg-[#FAF8F5] border border-[#E8E3DA] p-5">
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#8C857B] block mb-1">
+                  <div className="bg-[#0A0A0A] border border-[#222222] p-5">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#C9A84C] block mb-1">
                       Идеальная палитра SABYR
                     </span>
-                    <p className="font-serif text-lg text-[#1A1A1A] mb-1">
+                    <p
+                      className="text-lg text-[#F5F0EB] mb-1"
+                      style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+                    >
                       Рекомендованные оттенки
                     </p>
-                    <p className="text-xs text-[#6E6A63] leading-relaxed">
+                    <p className="text-xs text-[#8A8279] leading-relaxed">
                       {appearanceProfile.bestPalette}
                     </p>
                   </div>
 
-                  <div className="bg-[#FAF8F5] border border-[#E8E3DA] p-5 md:col-span-2">
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#8C857B] block mb-1">
+                  <div className="bg-[#0A0A0A] border border-[#222222] p-5 md:col-span-2">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#C9A84C] block mb-1">
                       Архитектура кроя и посадка
                     </span>
-                    <p className="text-sm text-[#1A1A1A] leading-relaxed">
+                    <p className="text-sm text-[#D5CFC7] leading-relaxed">
                       {appearanceProfile.silhouetteAdvice}
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="bg-[#FAF8F5] border border-[#E8E3DA] p-6 space-y-3 text-sm text-[#6E6A63]">
-                  <p className="text-[#1A1A1A] font-medium">
+                <div className="bg-[#0A0A0A] border border-[#222222] p-6 space-y-3 text-sm text-[#8A8279]">
+                  <p className="text-[#F5F0EB] font-medium">
                     Как работает AI-Стилист по вашему фото:
                   </p>
                   <p>
-                    1. Вы фотографируетесь на веб-камеру / фронтальную камеру или загружаете любое
-                    своё фото.
+                    1. Вы фотографируетесь на камеру или загружаете любое своё фото — никаких анкет
+                    заполнять не нужно.
                   </p>
                   <p>
-                    2. Алгоритм анализирует тон кожи, контрастность и пропорции плечевого пояса.
+                    2. Искусственный интеллект анализирует ваш цветотип, контрастность и пропорции
+                    плечевого пояса.
                   </p>
                   <p>
                     3. Из всех вещей каталога SABYR автоматически собираются 3 готовых топ-образа,
-                    которые вы можете в один клик примерить прямо на своё фото!
+                    которые вы можете в один клик надеть прямо на своё фото в AI-Примерочной.
                   </p>
                 </div>
               )}
@@ -604,10 +651,10 @@ export default function AIStylistPage() {
               {/* Global Size Selector for adding outfits to cart */}
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs uppercase tracking-wider text-[#6E6A63]">
-                    Ваш размер для заказа и 3D-примерки:
+                  <span className="text-xs uppercase tracking-wider text-[#8A8279]">
+                    Ваш размер для заказа и примерки:
                   </span>
-                  <span className="text-xs text-[#C5A059]">Полная сетка S – 3XL</span>
+                  <span className="text-xs text-[#C9A84C]">Полная сетка S – 3XL</span>
                 </div>
                 <div className="grid grid-cols-6 gap-2 max-w-md">
                   {["S", "M", "L", "XL", "2XL", "3XL"].map((sz) => (
@@ -617,8 +664,8 @@ export default function AIStylistPage() {
                       onClick={() => setSelectedSize(sz)}
                       className={`py-2.5 text-xs font-medium border transition-all ${
                         selectedSize === sz
-                          ? "border-[#1A1A1A] bg-[#1A1A1A] text-white"
-                          : "border-[#E8E3DA] bg-white text-[#1A1A1A] hover:border-[#1A1A1A]"
+                          ? "border-[#C9A84C] bg-[#C9A84C] text-[#0A0A0A] font-semibold"
+                          : "border-[#2A2A2A] bg-[#0A0A0A] text-[#F5F0EB] hover:border-[#C9A84C]"
                       }`}
                     >
                       {sz}
@@ -633,20 +680,23 @@ export default function AIStylistPage() {
         {/* TOP-3 CURATED OUTFITS SECTION */}
         {outfits.length > 0 && (
           <div className="space-y-10">
-            <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-[#E8E3DA] pb-5 gap-4">
+            <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-[#222222] pb-5 gap-4">
               <div>
-                <span className="text-[11px] uppercase tracking-[0.25em] text-[#C5A059] block mb-1">
-                  Персональная селекция из всего каталога
+                <span className="text-[11px] uppercase tracking-[0.25em] text-[#C9A84C] block mb-1">
+                  Персональная селекция из всего каталога SABYR
                 </span>
-                <h2 className="font-serif text-3xl md:text-4xl text-[#1A1A1A]">
-                  Топ-3 образа специально для вас
+                <h2
+                  className="text-3xl md:text-4xl text-[#F5F0EB]"
+                  style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+                >
+                  Топ-3 образа специально под ваше фото
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => userPhoto && runPhotoStylistAnalysis(userPhoto)}
                 disabled={isAnalyzing}
-                className="self-start md:self-auto px-5 py-2.5 border border-[#1A1A1A] text-xs uppercase tracking-widest text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors"
+                className="self-start md:self-auto px-5 py-2.5 border border-[#C9A84C] text-xs uppercase tracking-widest text-[#C9A84C] hover:bg-[#C9A84C] hover:text-[#0A0A0A] transition-colors"
               >
                 {isAnalyzing ? "Обновление..." : "Пересобрать топ-образы"}
               </button>
@@ -658,20 +708,23 @@ export default function AIStylistPage() {
                 return (
                   <div
                     key={outfit.id}
-                    className="bg-white border border-[#E8E3DA] p-6 md:p-8 shadow-sm"
+                    className="bg-[#111111] border border-[#222222] p-6 md:p-8"
                   >
                     {/* Outfit Header */}
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 mb-6 border-b border-[#E8E3DA]">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 mb-6 border-b border-[#222222]">
                       <div>
                         <div className="flex flex-wrap items-center gap-2.5 mb-2">
-                          <span className="px-3 py-1 bg-[#1A1A1A] text-[#C5A059] text-[10px] uppercase tracking-[0.2em] font-medium">
+                          <span className="px-3 py-1 bg-[#C9A84C] text-[#0A0A0A] text-[10px] uppercase tracking-[0.2em] font-semibold">
                             {outfit.badge}
                           </span>
-                          <span className="px-3 py-1 bg-[#FAF8F5] border border-[#E8E3DA] text-[#1A1A1A] text-[10px] uppercase tracking-widest font-medium">
+                          <span className="px-3 py-1 bg-[#0A0A0A] border border-[#2A2A2A] text-[#F5F0EB] text-[10px] uppercase tracking-widest">
                             Совпадение с вашим фото: {outfit.matchScore}%
                           </span>
                         </div>
-                        <h3 className="font-serif text-2xl md:text-3xl text-[#1A1A1A]">
+                        <h3
+                          className="text-2xl md:text-3xl text-[#F5F0EB]"
+                          style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
+                        >
                           {outfit.title}
                         </h3>
                       </div>
@@ -680,37 +733,37 @@ export default function AIStylistPage() {
                         <button
                           type="button"
                           onClick={() => handleTryOnOutfit(outfit)}
-                          className="px-6 py-3.5 bg-[#1A1A1A] text-white text-xs uppercase tracking-[0.18em] font-medium hover:bg-[#333333] transition-colors"
+                          className="px-6 py-3.5 border border-[#C9A84C] text-[#C9A84C] text-xs uppercase tracking-[0.18em] font-medium hover:bg-[#C9A84C] hover:text-[#0A0A0A] transition-colors"
                         >
                           Надеть этот образ на моё фото (AI-Примерка)
                         </button>
                         <button
                           type="button"
                           onClick={() => handleAddOutfitToCart(outfit)}
-                          className="px-6 py-3.5 bg-[#C5A059] text-[#121212] text-xs uppercase tracking-[0.18em] font-medium hover:bg-[#d4b06a] transition-colors"
+                          className="px-6 py-3.5 bg-[#C9A84C] text-[#0A0A0A] text-xs uppercase tracking-[0.18em] font-semibold hover:bg-[#E2C56D] transition-colors"
                         >
                           {addedOutfitId === outfit.id
                             ? "Образ добавлен в корзину"
-                            : `Купить весь образ (${totalOutfitPrice.toLocaleString("ru-KZ")} ₸)`}
+                            : `Купить весь образ (${formatPrice(totalOutfitPrice)})`}
                         </button>
                       </div>
                     </div>
 
                     {/* Stylist Rationale & Tip */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-[#FAF8F5] border border-[#E8E3DA] p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-[#0A0A0A] border border-[#222222] p-4">
                       <div>
-                        <span className="text-[10px] uppercase tracking-widest text-[#8C857B] block mb-1">
+                        <span className="text-[10px] uppercase tracking-widest text-[#8A8279] block mb-1">
                           Почему AI выбрал этот образ под ваше фото:
                         </span>
-                        <p className="text-xs md:text-sm text-[#1A1A1A] leading-relaxed">
+                        <p className="text-xs md:text-sm text-[#F5F0EB] leading-relaxed">
                           {outfit.rationale}
                         </p>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase tracking-widest text-[#C5A059] block mb-1">
+                        <span className="text-[10px] uppercase tracking-widest text-[#C9A84C] block mb-1">
                           Рекомендация по стилизации:
                         </span>
-                        <p className="text-xs md:text-sm text-[#6E6A63] leading-relaxed">
+                        <p className="text-xs md:text-sm text-[#8A8279] leading-relaxed">
                           {outfit.stylingTip}
                         </p>
                       </div>
@@ -721,30 +774,31 @@ export default function AIStylistPage() {
                       {outfit.items.map((product, idx) => (
                         <div
                           key={`${outfit.id}-${product.id}`}
-                          className="border border-[#E8E3DA] bg-[#FAF8F5] flex flex-col justify-between"
+                          className="border border-[#222222] bg-[#0A0A0A] flex flex-col justify-between"
                         >
                           <div>
-                            <div className="relative aspect-[3/4] bg-[#F2EFE9] overflow-hidden">
+                            <div className="relative aspect-[3/4] bg-[#151515] overflow-hidden">
                               <img
                                 src={product.images[0]}
                                 alt={product.name}
                                 className="w-full h-full object-cover"
                               />
-                              <span className="absolute top-3 left-3 bg-[#121212]/85 text-white px-2.5 py-1 text-[10px] uppercase tracking-widest">
+                              <span className="absolute top-3 left-3 bg-[#0A0A0A]/90 border border-[#333333] text-[#F5F0EB] px-2.5 py-1 text-[10px] uppercase tracking-widest">
                                 Изделие {idx + 1} · {product.category}
                               </span>
                             </div>
                             <div className="p-4">
                               <Link
                                 href={`/product/${product.slug}`}
-                                className="font-serif text-lg text-[#1A1A1A] hover:text-[#C5A059] transition-colors block mb-1"
+                                className="text-lg text-[#F5F0EB] hover:text-[#C9A84C] transition-colors block mb-1"
+                                style={{ fontFamily: "var(--font-cormorant), Georgia, serif" }}
                               >
                                 {product.name}
                               </Link>
-                              <p className="text-sm font-medium text-[#1A1A1A] mb-2">
-                                {product.price.toLocaleString("ru-KZ")} ₸ · Размер {selectedSize}
+                              <p className="text-sm font-medium text-[#C9A84C] mb-2">
+                                {formatPrice(product.price)} · Размер {selectedSize}
                               </p>
-                              <p className="text-xs text-[#6E6A63] line-clamp-2">
+                              <p className="text-xs text-[#8A8279] line-clamp-2">
                                 {product.aiDescription || product.description}
                               </p>
                             </div>
@@ -753,14 +807,14 @@ export default function AIStylistPage() {
                           <div className="p-4 pt-0 flex gap-2">
                             <Link
                               href={`/ai-tryon?productId=${product.id}&autoTryOn=1`}
-                              className="flex-1 py-2.5 bg-[#1A1A1A] text-white text-center text-[10px] uppercase tracking-widest hover:bg-[#333]"
+                              className="flex-1 py-2.5 bg-[#C9A84C] text-[#0A0A0A] font-semibold text-center text-[10px] uppercase tracking-widest hover:bg-[#E2C56D]"
                             >
-                              Примерить на себя
+                              Надеть на моё фото
                             </Link>
                             <button
                               type="button"
                               onClick={() => handleSwapItemInOutfit(outfit.id, idx)}
-                              className="px-3 py-2.5 border border-[#D5CFC4] text-[10px] uppercase tracking-widest text-[#6E6A63] hover:text-[#1A1A1A] hover:border-[#1A1A1A]"
+                              className="px-3 py-2.5 border border-[#333333] text-[10px] uppercase tracking-widest text-[#8A8279] hover:text-[#F5F0EB] hover:border-[#C9A84C]"
                             >
                               Заменить
                             </button>

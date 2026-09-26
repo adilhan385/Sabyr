@@ -11,26 +11,56 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { SabyrLogo, SabyrAvatar } from "@/components/ui/SabyrLogo";
 
-// Initial placeholder product while dynamic API loads
+// Initial featured products from @sabyr.wear while dynamic API loads
 const INITIAL_FEATURED = [
   {
-    id: "example-1",
-    name: "Пример",
-    price: 50000,
-    comparePrice: 65000,
-    image: "/example-product.svg",
-    slug: "example-item",
+    id: "sabyr-1",
+    name: "Двубортный чёрный костюм SABYR",
+    price: 42990,
+    comparePrice: null,
+    image: "/products/black-suit-1.jpg",
+    slug: "dvubortnyj-chernyj-kostyum-sabyr",
     isNew: true,
-    color: "Пример изделия",
+    color: "Глубокий чёрный",
+  },
+  {
+    id: "sabyr-2",
+    name: "Серый классический костюм SABYR",
+    price: 42990,
+    comparePrice: 43990,
+    image: "/products/grey-suit-1.jpg",
+    slug: "seryj-klassicheskij-kostyum-sabyr",
+    isNew: true,
+    color: "Графитовый серый",
+  },
+  {
+    id: "sabyr-3",
+    name: "Повседневный комплект SABYR на молнии",
+    price: 42990,
+    comparePrice: null,
+    image: "/products/zip-set-1.jpg",
+    slug: "povsednevnyj-komplekt-sabyr-na-molnii",
+    isNew: true,
+    color: "Чёрный",
+  },
+  {
+    id: "sabyr-5",
+    name: "Базовое белое поло SABYR",
+    price: 11990,
+    comparePrice: 14990,
+    image: "/products/white-polo-1.jpg",
+    slug: "bazovoe-beloe-polo-sabyr",
+    isNew: true,
+    color: "Белый",
   },
 ];
 
 const CATEGORIES = [
-  { name: "Худи и свитшоты", slug: "hoodies-sweatshirts", image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800&q=85" },
-  { name: "Футболки и лонгсливы", slug: "tshirts-longsleeves", image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&q=85" },
-  { name: "Костюмы и комплекты", slug: "sets-suits", image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=85" },
-  { name: "Брюки и джоггеры", slug: "pants-joggers", image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=85" },
-  { name: "Верхняя одежда и куртки", slug: "outerwear-jackets", image: "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=800&q=85" },
+  { name: "Костюмы и комплекты", slug: "sets-suits", image: "/products/black-suit-1.jpg" },
+  { name: "Рубашки и поло", slug: "shirts-polo", image: "/products/white-polo-1.jpg" },
+  { name: "Футболки и лонгсливы", slug: "tshirts-longsleeves", image: "/products/print-tshirt-2.jpg" },
+  { name: "Брюки и джоггеры", slug: "pants-joggers", image: "/products/wide-pants-1.jpg" },
+  { name: "Худи и свитшоты", slug: "hoodies-sweatshirts", image: "/products/zip-set-1.jpg" },
 ];
 
 const fadeInUp = {

@@ -19,17 +19,18 @@ const SIZE_DATA = {
     { size: "M", ru: "48", bust: "96-100", waist: "82-86", hips: "98-102" },
     { size: "L", ru: "50", bust: "100-104", waist: "86-90", hips: "102-106" },
     { size: "XL", ru: "52", bust: "104-108", waist: "90-94", hips: "106-110" },
-    { size: "XXL", ru: "54", bust: "108-112", waist: "94-98", hips: "110-114" },
+    { size: "2XL", ru: "54", bust: "108-112", waist: "94-98", hips: "110-114" },
+    { size: "3XL", ru: "56", bust: "112-116", waist: "98-102", hips: "114-118" },
   ],
   outerwear: [
-    { size: "XS/S (Оверсайз)", ru: "40-44", bust: "80-92", waist: "60-72", hips: "88-100" },
-    { size: "M/L (Оверсайз)", ru: "44-48", bust: "92-102", waist: "72-84", hips: "100-110" },
-    { size: "L/XL (Оверсайз)", ru: "48-52", bust: "102-112", waist: "84-96", hips: "110-120" },
+    { size: "S/M (Свободный крой)", ru: "46-48", bust: "92-100", waist: "78-86", hips: "94-102" },
+    { size: "L/XL (Свободный крой)", ru: "50-52", bust: "100-108", waist: "86-94", hips: "102-110" },
+    { size: "2XL/3XL (Свободный крой)", ru: "54-56", bust: "108-116", waist: "94-102", hips: "110-118" },
   ],
 };
 
 export default function SizeGuidePage() {
-  const [activeTab, setActiveTab] = useState<CategoryType>("women");
+  const [activeTab, setActiveTab] = useState<CategoryType>("men");
 
   return (
     <main className="min-h-screen pb-24 bg-background">

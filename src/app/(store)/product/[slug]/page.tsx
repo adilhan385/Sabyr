@@ -29,11 +29,12 @@ import { useFavoritesStore } from "@/store/favorites";
 import { ProductItem, PRODUCTS as INITIAL_PRODUCTS } from "@/data/mockData";
 
 const SIZE_GUIDE = [
-  { size: "XS", ru: "42", bust: "82-85", waist: "62-65", hips: "88-91" },
-  { size: "S", ru: "44", bust: "86-89", waist: "66-69", hips: "92-95" },
-  { size: "M", ru: "46", bust: "90-93", waist: "70-73", hips: "96-99" },
-  { size: "L", ru: "48", bust: "94-98", waist: "74-78", hips: "100-104" },
-  { size: "XL", ru: "50", bust: "99-103", waist: "79-83", hips: "105-109" },
+  { size: "S", ru: "46", bust: "90-94", waist: "76-80", hips: "94-98" },
+  { size: "M", ru: "48", bust: "95-98", waist: "81-84", hips: "99-102" },
+  { size: "L", ru: "50", bust: "99-102", waist: "85-88", hips: "103-106" },
+  { size: "XL", ru: "52", bust: "103-106", waist: "89-92", hips: "107-110" },
+  { size: "2XL", ru: "54", bust: "107-110", waist: "93-96", hips: "111-114" },
+  { size: "3XL", ru: "56", bust: "111-115", waist: "97-102", hips: "115-119" },
 ];
 
 export default function ProductPage() {

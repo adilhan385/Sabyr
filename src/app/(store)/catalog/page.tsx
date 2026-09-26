@@ -10,7 +10,7 @@ import { formatPrice } from "@/lib/utils";
 import { useFavoritesStore } from "@/store/favorites";
 import { ProductItem, PRODUCTS as INITIAL_PRODUCTS } from "@/data/mockData";
 
-const SIZES = ["XS", "S", "M", "L", "XL"];
+const SIZES = ["S", "M", "L", "XL", "2XL", "3XL"];
 const SORT_OPTIONS = [
   { value: "newest", label: "Сначала новые" },
   { value: "price_asc", label: "По возрастанию цены" },
@@ -25,11 +25,11 @@ function CatalogContent() {
 
   const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
   const [apiCategories, setApiCategories] = useState<string[]>([
-    "Худи и свитшоты",
-    "Футболки и лонгсливы",
     "Костюмы и комплекты",
-    "Брюки и джоггеры",
     "Рубашки и поло",
+    "Футболки и лонгсливы",
+    "Брюки и джоггеры",
+    "Худи и свитшоты",
     "Верхняя одежда и куртки",
     "Аксессуары",
   ]);
@@ -39,7 +39,7 @@ function CatalogContent() {
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState("newest");
   const [showFilters, setShowFilters] = useState(false);
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 300000]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 100000]);
 
   const { toggleFavorite, isFavorite } = useFavoritesStore();
 
@@ -278,16 +278,16 @@ function CatalogContent() {
               </div>
               <input
                 type="range"
-                min={20000}
-                max={300000}
-                step={5000}
+                min={10000}
+                max={100000}
+                step={2000}
                 value={priceRange[1]}
                 onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
                 className="w-full accent-foreground cursor-pointer"
               />
               <div className="flex justify-between text-[11px] text-muted-foreground font-mono mt-1.5">
-                <span>{formatPrice(20000)}</span>
-                <span>{formatPrice(300000)}</span>
+                <span>{formatPrice(10000)}</span>
+                <span>{formatPrice(100000)}</span>
               </div>
             </div>
 
@@ -297,7 +297,7 @@ function CatalogContent() {
                 onClick={() => {
                   setSelectedSizes([]);
                   setSelectedColors([]);
-                  setPriceRange([0, 300000]);
+                  setPriceRange([0, 100000]);
                   setUserCategory("Все");
                 }}
                 className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors py-2.5 px-4 border border-border rounded-full hover:bg-secondary font-medium"
@@ -321,7 +321,7 @@ function CatalogContent() {
                 setUserCategory("Все");
                 setSelectedSizes([]);
                 setSelectedColors([]);
-                setPriceRange([0, 300000]);
+                setPriceRange([0, 100000]);
               }}
               className="px-6 py-3 bg-foreground text-background text-xs uppercase tracking-[0.12em] font-semibold rounded-full hover:opacity-90 transition-opacity"
             >

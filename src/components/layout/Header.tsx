@@ -211,13 +211,16 @@ export function Header() {
                 )}
               </Link>
 
-              {/* Account */}
+              {/* Account / Login */}
               <Link
                 href="/account"
-                className="w-9 h-9 flex items-center justify-center hover:bg-secondary/70 rounded-full transition-colors text-foreground"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 hover:bg-secondary/70 border border-border/60 rounded-full transition-colors text-foreground"
                 aria-label="Личный кабинет"
               >
                 <User className="w-4 h-4 stroke-[1.5]" />
+                <span className="text-[11px] uppercase tracking-wider font-semibold">
+                  {isGuest ? "Войти" : "Кабинет"}
+                </span>
               </Link>
             </div>
           </div>

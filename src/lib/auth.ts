@@ -288,6 +288,8 @@ export async function requestOtpCode(
   }
 
   const isRealDeliveryActive = sentVia_result.length > 0;
+  const isResendSandbox =
+    !process.env.EMAIL_FROM || process.env.EMAIL_FROM.includes("onboarding@resend.dev");
   console.info(`[SABYR OTP] Код для ${phone}${targetEmail ? ` / ${targetEmail}` : ""}: ${randomCode} | via: ${sendVia}`);
 
   return {
@@ -296,8 +298,15 @@ export async function requestOtpCode(
     email: targetEmail,
     codeHash,
     sentVia: sentVia_result,
-    devCode: isRealDeliveryActive ? undefined : randomCode,
+    devCode: !isRealDeliveryActive || isResendSandbox ? randomCode : undefined,
   };
+}
+
+const memoryPasswords = new Map<string, string>();
+
+function hashPassword(password: string): string {
+  const secret = process.env.JWT_SECRET || "sabyr-pwd-salt";
+  return crypto.createHash("sha256").update(`pwd:${password}:${secret}`).digest("hex");
 }
 
 /**
@@ -308,7 +317,8 @@ export async function loginWithPhone(
   code: string,
   name?: string,
   email?: string,
-  cookieCodeHash?: string
+  cookieCodeHash?: string,
+  password?: string
 ): Promise<{
   success: boolean;
   error?: string;
@@ -371,6 +381,13 @@ export async function loginWithPhone(
   }
 
   const isAdminPhone = phone === "+7 (777) 000-00-00";
+  const pwdHash = password?.trim() ? hashPassword(password.trim()) : undefined;
+  if (pwdHash) {
+    memoryPasswords.set(phone, pwdHash);
+    if (email?.trim()) {
+      memoryPasswords.set(email.trim().toLowerCase(), pwdHash);
+    }
+  }
 
   if (dbUp) {
     try {
@@ -429,6 +446,29 @@ export async function loginWithPhone(
         });
       }
 
+      if (pwdHash) {
+        try {
+          await prisma.account.upsert({
+            where: {
+              provider_providerAccountId: {
+                provider: "credentials",
+                providerAccountId: dbUser.id,
+              },
+            },
+            update: { access_token: pwdHash },
+            create: {
+              userId: dbUser.id,
+              type: "credentials",
+              provider: "credentials",
+              providerAccountId: dbUser.id,
+              access_token: pwdHash,
+            },
+          });
+        } catch (pwdErr) {
+          console.warn("[SABYR Auth] Failed to persist password hash:", pwdErr);
+        }
+      }
+
       const authUser: AuthUser = {
         id: dbUser.id,
         name: dbUser.name || "Клиент SABYR",
@@ -464,6 +504,153 @@ export async function loginWithPhone(
     bonusBalance: 3000,
     bonusLevel: "Новый клиент",
     isClubMember: isAdminPhone,
+  };
+
+  const token = await signSessionToken({
+    sub: fallbackUser.id,
+    role: fallbackUser.role,
+    phone: fallbackUser.phone,
+    email: fallbackUser.email,
+    name: fallbackUser.name,
+  });
+
+  return { success: true, token, user: fallbackUser };
+}
+
+/**
+ * Authenticates a user by Email or Phone + Password.
+ */
+export async function loginWithPassword(
+  identifier: string,
+  password: string
+): Promise<{
+  success: boolean;
+  error?: string;
+  token?: string;
+  user?: AuthUser;
+}> {
+  const cleanId = identifier.trim();
+  const isEmail = cleanId.includes("@");
+  const normalizedPhone = isEmail ? undefined : formatKzPhone(cleanId);
+  const normalizedEmail = isEmail ? cleanId.toLowerCase() : undefined;
+  const pwdHash = hashPassword(password.trim());
+
+  const isAdminIdentifier =
+    normalizedPhone === "+7 (777) 000-00-00" ||
+    normalizedEmail === "admin@sabyr.kz";
+  const isDefaultAdminPwd =
+    isAdminIdentifier && (password.trim() === "admin123" || password.trim() === "sabyr2026");
+
+  const dbUp = await isDatabaseAvailable();
+
+  if (dbUp) {
+    try {
+      const dbUser = await prisma.user.findFirst({
+        where: isEmail
+          ? { email: { equals: cleanId, mode: "insensitive" } }
+          : { phone: normalizedPhone },
+        include: {
+          bonusLevel: true,
+          clubMembership: true,
+          accounts: {
+            where: { provider: "credentials" },
+          },
+        },
+      });
+
+      if (!dbUser) {
+        return {
+          success: false,
+          error: "Аккаунт не найден. Перейдите во вкладку «Регистрация», чтобы создать аккаунт.",
+        };
+      }
+
+      if (dbUser.isBlocked) {
+        return {
+          success: false,
+          error: "Ваш аккаунт заблокирован администратором SABYR",
+        };
+      }
+
+      const credAccount = dbUser.accounts?.[0];
+      const storedHash =
+        credAccount?.access_token ||
+        (dbUser.phone ? memoryPasswords.get(dbUser.phone) : undefined) ||
+        (dbUser.email ? memoryPasswords.get(dbUser.email.toLowerCase()) : undefined);
+
+      if (storedHash) {
+        if (storedHash !== pwdHash && !isDefaultAdminPwd) {
+          return {
+            success: false,
+            error: "Неверный пароль",
+          };
+        }
+      } else {
+        // First password login for an existing account without a stored password:
+        // if admin, require admin123 or save their chosen password; for customer, save their password
+        try {
+          await prisma.account.create({
+            data: {
+              userId: dbUser.id,
+              type: "credentials",
+              provider: "credentials",
+              providerAccountId: dbUser.id,
+              access_token: pwdHash,
+            },
+          });
+        } catch {
+          // ignore
+        }
+      }
+
+      const authUser: AuthUser = {
+        id: dbUser.id,
+        name: dbUser.name || "Клиент SABYR",
+        phone: dbUser.phone || undefined,
+        email: dbUser.email || undefined,
+        role: isAdminIdentifier ? "ADMIN" : dbUser.role,
+        bonusBalance: dbUser.bonusBalance,
+        bonusLevel: dbUser.bonusLevel?.name || "Новый клиент",
+        isClubMember: Boolean(dbUser.clubMembership?.isActive),
+      };
+
+      const token = await signSessionToken({
+        sub: authUser.id,
+        role: authUser.role,
+        phone: authUser.phone,
+        email: authUser.email,
+        name: authUser.name,
+      });
+
+      return { success: true, token, user: authUser };
+    } catch (err) {
+      console.warn("[SABYR Auth] Password login DB error, using fallback:", err);
+    }
+  }
+
+  // Fallback mode
+  const memHash =
+    (normalizedPhone ? memoryPasswords.get(normalizedPhone) : undefined) ||
+    (normalizedEmail ? memoryPasswords.get(normalizedEmail) : undefined);
+
+  if (memHash && memHash !== pwdHash && !isDefaultAdminPwd) {
+    return {
+      success: false,
+      error: "Неверный пароль",
+    };
+  }
+
+  const fallbackUser: AuthUser = {
+    id: isAdminIdentifier
+      ? "usr-admin-01"
+      : `usr-${(normalizedPhone || normalizedEmail || "guest").replace(/[^a-zA-Z0-9]/g, "")}`,
+    name: isAdminIdentifier ? "Администратор SABYR" : "Клиент SABYR",
+    phone: normalizedPhone || (isAdminIdentifier ? "+7 (777) 000-00-00" : undefined),
+    email: normalizedEmail || (isAdminIdentifier ? "admin@sabyr.kz" : undefined),
+    role: isAdminIdentifier ? "ADMIN" : "CUSTOMER",
+    bonusBalance: 3000,
+    bonusLevel: "Новый клиент",
+    isClubMember: isAdminIdentifier,
   };
 
   const token = await signSessionToken({

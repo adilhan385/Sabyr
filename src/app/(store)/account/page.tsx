@@ -61,7 +61,11 @@ export default function AccountPage() {
 
   const favoriteProducts = catalogProducts.filter((p) => favoriteIds.includes(p.id));
 
-  // ─── Auth OTP Login State ──────────────────────────────────────────────────
+  // ─── Auth Login / Register State ───────────────────────────────────────────
+  const [authTab, setAuthTab] = useState<"login" | "register">("login");
+  const [loginMethod, setLoginMethod] = useState<"password" | "otp">("password");
+  const [loginIdentifier, setLoginIdentifier] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
   const [loginPhone, setLoginPhone] = useState("");
   const [loginName, setLoginName] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
@@ -95,12 +99,52 @@ export default function AccountPage() {
 
   const [devCodeHint, setDevCodeHint] = useState<string | null>(null);
 
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    if (!loginIdentifier.trim() || !loginPassword.trim()) {
+      setAuthError("Введите ваш Email/телефон и пароль.");
+      return;
+    }
+    if (!acceptedTerms) {
+      setAuthError("Для входа необходимо согласиться с Условиями использования.");
+      return;
+    }
+    setAuthSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "password",
+          identifier: loginIdentifier.trim(),
+          password: loginPassword,
+          acceptedTerms: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAuthError(data.error || "Неверный логин или пароль");
+      } else {
+        await refreshSession();
+      }
+    } catch {
+      setAuthError("Не удалось выполнить вход. Проверьте соединение.");
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
     setDevCodeHint(null);
     if (!loginEmail.trim()) {
       setAuthError("Пожалуйста, укажите ваш Email (обязательное поле).");
+      return;
+    }
+    if (authTab === "register" && loginPassword.trim().length < 4) {
+      setAuthError("Придумайте пароль (минимум 4 символа).");
       return;
     }
     if (!acceptedTerms) {
@@ -159,6 +203,7 @@ export default function AccountPage() {
           code: otpCode,
           name: loginName || undefined,
           email: loginEmail.trim(),
+          password: loginPassword || undefined,
           acceptedTerms: true,
         }),
       });
@@ -253,88 +298,80 @@ export default function AccountPage() {
               <LogIn className="w-6 h-6 text-foreground stroke-[1.4]" />
             </div>
             <h1 className="font-serif text-2xl font-light tracking-tight">
-              Вход и регистрация
+              {authTab === "login" ? "Вход в личный кабинет" : "Регистрация в SABYR"}
             </h1>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Укажите ваш номер телефона и Email, затем выберите, куда отправить одноразовый код подтверждения.
+              {authTab === "login"
+                ? "Войдите по паролю или получите одноразовый код подтверждения."
+                : "Заполните данные и придумайте пароль для создания аккаунта."}
             </p>
           </div>
 
-          {otpStep === "phone" ? (
-            <form onSubmit={handleRequestOtp} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  Номер телефона *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={loginPhone}
-                  onChange={(e) => setLoginPhone(e.target.value)}
-                  placeholder="Введите номер телефона (+7...)"
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
-                />
-              </div>
+          {/* Top Tabs: Вход vs Регистрация */}
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-secondary/70 border border-border">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthTab("login");
+                setOtpStep("phone");
+                setAuthError(null);
+              }}
+              className={`py-2.5 text-xs font-semibold uppercase tracking-wider rounded-lg transition-all ${
+                authTab === "login"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Вход
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthTab("register");
+                setOtpStep("phone");
+                setAuthError(null);
+              }}
+              className={`py-2.5 text-xs font-semibold uppercase tracking-wider rounded-lg transition-all ${
+                authTab === "register"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Регистрация
+            </button>
+          </div>
 
+          {/* 1) LOGIN TAB + PASSWORD MODE */}
+          {authTab === "login" && loginMethod === "password" && (
+            <form onSubmit={handlePasswordLogin} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  Email (Почта) *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  placeholder="Введите ваш Email (обязательно)"
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  Имя
+                  Email или номер телефона *
                 </label>
                 <input
                   type="text"
-                  value={loginName}
-                  onChange={(e) => setLoginName(e.target.value)}
-                  placeholder="Введите ваше имя"
-                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-xs focus:outline-none focus:border-foreground"
+                  required
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  placeholder="Введите ваш Email или +7..."
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
                 />
               </div>
 
-              {/* Channel selector: Email vs SMS */}
-              <div className="space-y-1.5 pt-1">
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold block">
-                  Куда отправить код подтверждения? *
+              <div className="space-y-1.5">
+                <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  Пароль *
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSendVia("email")}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all ${
-                      sendVia === "email"
-                        ? "border-foreground bg-foreground text-background shadow-sm"
-                        : "border-border bg-background text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    На Email (Почту)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSendVia("sms")}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all ${
-                      sendVia === "sms"
-                        ? "border-foreground bg-foreground text-background shadow-sm"
-                        : "border-border bg-background text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    По SMS (На номер)
-                  </button>
-                </div>
+                <input
+                  type="password"
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Введите ваш пароль"
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
+                />
               </div>
 
-              {/* Mandatory Terms of Use Checkbox */}
               <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -371,93 +408,279 @@ export default function AccountPage() {
 
               <button
                 type="submit"
-                disabled={authSubmitting || !acceptedTerms || !loginEmail.trim() || !loginPhone.trim()}
+                disabled={authSubmitting || !acceptedTerms || !loginIdentifier.trim() || !loginPassword.trim()}
                 className="w-full py-3.5 bg-foreground text-background text-xs uppercase tracking-[0.15em] font-semibold rounded-full hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {authSubmitting
-                  ? "Отправка кода..."
-                  : sendVia === "email"
-                    ? "Получить код на Email"
-                    : "Получить SMS-код"}
+                {authSubmitting ? "Вход..." : "Войти в кабинет"}
               </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginMethod("otp");
+                    setOtpStep("phone");
+                    setAuthError(null);
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
+                >
+                  Войти по одноразовому коду (Email или SMS)
+                </button>
+              </div>
             </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-secondary/60 text-xs space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">
-                    {otpSentTo?.via === "email"
-                      ? "Код отправлен на почту:"
-                      : "Код отправлен на номер:"}
-                  </span>
+          )}
+
+          {/* 2) REGISTER TAB OR LOGIN VIA OTP */}
+          {(authTab === "register" || (authTab === "login" && loginMethod === "otp")) && (
+            <>
+              {otpStep === "phone" ? (
+                <form onSubmit={handleRequestOtp} className="space-y-4">
+                  {authTab === "register" && (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        Ваше имя *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={loginName}
+                        onChange={(e) => setLoginName(e.target.value)}
+                        placeholder="Введите ваше имя"
+                        className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Номер телефона *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={loginPhone}
+                      onChange={(e) => setLoginPhone(e.target.value)}
+                      placeholder="Введите номер телефона (+7...)"
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Email (Почта) *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="Введите ваш Email (обязательно)"
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
+                    />
+                  </div>
+
+                  {authTab === "register" && (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        Придумайте пароль *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={4}
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="Минимум 4 символа"
+                        className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
+                      />
+                    </div>
+                  )}
+
+                  {/* Channel selector: Email vs SMS */}
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold block">
+                      Куда отправить код подтверждения? *
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSendVia("email")}
+                        className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all ${
+                          sendVia === "email"
+                            ? "border-foreground bg-foreground text-background shadow-sm"
+                            : "border-border bg-background text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        На Email (Почту)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSendVia("sms")}
+                        className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all ${
+                          sendVia === "sms"
+                            ? "border-foreground bg-foreground text-background shadow-sm"
+                            : "border-border bg-background text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        По SMS (На номер)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Mandatory Terms of Use Checkbox */}
+                  <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={acceptedTerms}
+                      onChange={(e) => setAcceptedTerms(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-foreground rounded flex-shrink-0 cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground leading-relaxed">
+                      Я соглашаюсь с{" "}
+                      <Link
+                        href="/terms"
+                        target="_blank"
+                        className="text-foreground underline underline-offset-2 hover:opacity-80"
+                      >
+                        Условиями использования
+                      </Link>{" "}
+                      и{" "}
+                      <Link
+                        href="/privacy"
+                        target="_blank"
+                        className="text-foreground underline underline-offset-2 hover:opacity-80"
+                      >
+                        Политикой конфиденциальности
+                      </Link>
+                    </span>
+                  </label>
+
+                  {authError && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 p-3 rounded-xl">
+                      {authError}
+                    </p>
+                  )}
+
                   <button
-                    type="button"
-                    onClick={() => setOtpStep("phone")}
-                    className="underline text-foreground font-medium"
+                    type="submit"
+                    disabled={
+                      authSubmitting ||
+                      !acceptedTerms ||
+                      !loginEmail.trim() ||
+                      !loginPhone.trim() ||
+                      (authTab === "register" && loginPassword.trim().length < 4)
+                    }
+                    className="w-full py-3.5 bg-foreground text-background text-xs uppercase tracking-[0.15em] font-semibold rounded-full hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Изменить
+                    {authSubmitting
+                      ? "Отправка кода..."
+                      : authTab === "register"
+                        ? "Получить код и зарегистрироваться"
+                        : sendVia === "email"
+                          ? "Получить код на Email"
+                          : "Получить SMS-код"}
                   </button>
-                </div>
-                <p className="font-semibold">{otpSentTo?.target || loginEmail || loginPhone}</p>
-              </div>
 
-              {devCodeHint && (
-                <div className="p-3 rounded-xl border border-border bg-secondary/40 text-xs flex items-center justify-between">
-                  <span className="text-muted-foreground">Код подтверждения:</span>
-                  <span className="font-mono font-bold tracking-widest text-sm">{devCodeHint}</span>
-                </div>
-              )}
+                  {authTab === "login" && (
+                    <div className="text-center pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginMethod("password");
+                          setAuthError(null);
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
+                      >
+                        Войти по паролю
+                      </button>
+                    </div>
+                  )}
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="p-3.5 rounded-xl bg-secondary/60 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">
+                        {otpSentTo?.via === "email"
+                          ? "Код отправлен на почту:"
+                          : "Код отправлен на номер:"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setOtpStep("phone")}
+                        className="underline text-foreground font-medium"
+                      >
+                        Изменить
+                      </button>
+                    </div>
+                    <p className="font-semibold">{otpSentTo?.target || loginEmail || loginPhone}</p>
+                  </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  4-значный код подтверждения
-                </label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  required
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="••••"
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-center font-mono text-lg tracking-[0.4em] focus:outline-none focus:border-foreground"
-                />
-              </div>
+                  {devCodeHint && (
+                    <div className="p-3 rounded-xl border border-border bg-secondary/40 text-xs flex items-center justify-between">
+                      <span className="text-muted-foreground">Код подтверждения:</span>
+                      <span className="font-mono font-bold tracking-widest text-sm">{devCodeHint}</span>
+                    </div>
+                  )}
 
-              {/* Mandatory Terms of Use Checkbox on step 2 as well */}
-              <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  required
-                  checked={acceptedTerms}
-                  onChange={(e) => setAcceptedTerms(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-foreground rounded flex-shrink-0 cursor-pointer"
-                />
-                <span className="text-xs text-muted-foreground leading-relaxed">
-                  Подтверждаю согласие с{" "}
-                  <Link
-                    href="/terms"
-                    target="_blank"
-                    className="text-foreground underline underline-offset-2 hover:opacity-80"
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Введите 4-значный код подтверждения *
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      required
+                      autoFocus
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="••••"
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-background text-center font-mono text-lg tracking-[0.4em] focus:outline-none focus:border-foreground"
+                    />
+                  </div>
+
+                  {/* Mandatory Terms of Use Checkbox on step 2 as well */}
+                  <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={acceptedTerms}
+                      onChange={(e) => setAcceptedTerms(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-foreground rounded flex-shrink-0 cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground leading-relaxed">
+                      Подтверждаю согласие с{" "}
+                      <Link
+                        href="/terms"
+                        target="_blank"
+                        className="text-foreground underline underline-offset-2 hover:opacity-80"
+                      >
+                        Условиями использования
+                      </Link>
+                    </span>
+                  </label>
+
+                  {authError && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 p-3 rounded-xl">
+                      {authError}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={authSubmitting || otpCode.length !== 4 || !acceptedTerms}
+                    className="w-full py-3.5 bg-foreground text-background text-xs uppercase tracking-[0.15em] font-semibold rounded-full hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Условиями использования
-                  </Link>
-                </span>
-              </label>
-
-              {authError && (
-                <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 p-3 rounded-xl">
-                  {authError}
-                </p>
+                    {authSubmitting
+                      ? "Проверка..."
+                      : authTab === "register"
+                        ? "Подтвердить код и создать аккаунт"
+                        : "Подтвердить код и войти"}
+                  </button>
+                </form>
               )}
-
-              <button
-                type="submit"
-                disabled={authSubmitting || otpCode.length !== 4 || !acceptedTerms}
-                className="w-full py-3.5 bg-foreground text-background text-xs uppercase tracking-[0.15em] font-semibold rounded-full hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {authSubmitting ? "Проверка..." : "Войти в кабинет"}
-              </button>
-            </form>
+            </>
           )}
 
           <div className="pt-2 border-t border-border text-center">

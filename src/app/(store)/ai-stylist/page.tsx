@@ -1,755 +1,780 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Image from "next/image";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Sparkles,
-  Camera,
-  RefreshCw,
-  ShoppingBag,
-  Check,
-  ShieldCheck,
-  Briefcase,
-  Building2,
-  Gem,
-  Moon,
-  Award,
-  BookOpen,
-  Compass,
-  Music,
-  Sun,
-  Eye,
-  Share2,
-  History,
-  BookmarkCheck,
-  ArrowLeft,
-  Crown,
-  Lock,
-} from "lucide-react";
-import { PRODUCTS, ProductItem } from "@/data/mockData";
-import { formatPrice } from "@/lib/utils";
-import { useCartStore } from "@/store/cart";
-import { useSabySession } from "@/hooks/useSabySession";
+import { useRouter } from "next/navigation";
+import { useCartStore } from "@/store/useCartStore";
+import { ProductItem } from "@/data/products";
 
-const OCCASIONS = [
-  { id: "interview", label: "Интервью / Собеседование", icon: Briefcase, note: "Сдержанный авторитет и уверенность" },
-  { id: "business", label: "Деловая встреча", icon: Building2, note: "Статусность, безупречный крой" },
-  { id: "wedding", label: "Свадьба / Той", icon: Gem, note: "Торжественный вечерний шик" },
-  { id: "date", label: "Свидание", icon: Moon, note: "Интригующий силуэт и мягкие фактуры" },
-  { id: "birthday", label: "День рождения", icon: Award, note: "Праздничный акцентный образ" },
-  { id: "university", label: "Университет / Лекция", icon: BookOpen, note: "Интеллектуальный преппи-минимализм" },
-  { id: "walk", label: "Прогулка по городу", icon: Compass, note: "Расслабленный комфорт и теплые слои" },
-  { id: "party", label: "Вечеринка", icon: Music, note: "Скульптурные линии, акцент на детали" },
-  { id: "everyday", label: "Повседневный образ", icon: Sun, note: "Базовая безукоризненная капсула" },
-];
-
-const STYLES = [
-  { id: "minimalism", label: "Чистый Минимализм" },
-  { id: "old_money", label: "Quiet Luxury / Old Money" },
-  { id: "business_casual", label: "Smart Business" },
-  { id: "monochrome", label: "Тотальный Монохром" },
-];
-
-const COLOR_PALETTES = [
-  { id: "monochrome_dark", label: "Черный / Графит / Уголь", colors: ["#0A0A0A", "#262626", "#404040"] },
-  { id: "warm_neutrals", label: "Беж / Песок / Молоко", colors: ["#E7DFD5", "#C5B49C", "#F5F2EB"] },
-  { id: "contrast", label: "Контраст Чёрного и Белого", colors: ["#0A0A0A", "#FFFFFF"] },
-];
-
-const SIZES = ["S", "M", "L", "XL", "2XL", "3XL"];
-
-export interface SavedLook {
-  id: string;
-  createdAt: string;
-  occasionId: string;
-  occasionLabel: string;
-  items: ProductItem[];
-  rationale: string;
-  totalPrice: number;
+interface AppearanceProfile {
+  colorType: string;
+  contrastLevel: string;
+  bestPalette: string;
+  silhouetteAdvice: string;
+  recommendedSize: string;
 }
 
-export default function AiStylistPage() {
-  const [step, setStep] = useState<"form" | "loading" | "result">("form");
-  const [selectedOccasion, setSelectedOccasion] = useState(OCCASIONS[0].id);
-  const [selectedStyle, setSelectedStyle] = useState(STYLES[0].id);
-  const [selectedPalette, setSelectedPalette] = useState(COLOR_PALETTES[0].id);
-  const [selectedSize, setSelectedSize] = useState("L");
-  const [userQuery, setUserQuery] = useState("");
-  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+interface CuratedOutfit {
+  id: string;
+  rank: number;
+  title: string;
+  badge: string;
+  matchScore: number;
+  rationale: string;
+  stylingTip: string;
+  items: ProductItem[];
+}
 
-  // Result outfit state
-  const [lookItems, setLookItems] = useState<ProductItem[]>([]);
-  const [aiRationale, setAiRationale] = useState("");
-  const [addedAllToCart, setAddedAllToCart] = useState(false);
-  const [copiedShare, setCopiedShare] = useState(false);
-
-  // History of generated looks (hydrated after mount to prevent SSR/CSR mismatch)
-  const [savedLooks, setSavedLooks] = useState<SavedLook[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-
-  const [aiClubOnly, setAiClubOnly] = useState(true);
-  const [clubAnnualPrice, setClubAnnualPrice] = useState("99 000 ₸");
-  const [clubMonthlyPrice, setClubMonthlyPrice] = useState("12 000 ₸");
-
-  const { addItem, openCart } = useCartStore();
-  const { user, isLoading, isGuest } = useSabySession();
-  const hasClubAccess = Boolean(!aiClubOnly || user.clubMembership?.isActive || user.role === "ADMIN");
-
-  const [catalogProducts, setCatalogProducts] = useState<ProductItem[]>(PRODUCTS);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("sabyr_stylist_history");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          requestAnimationFrame(() => setSavedLooks(parsed));
-        }
-      }
-    } catch {
-      // Ignore storage read errors
-    }
-
-    fetch("/api/products")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.products)) {
-          setCatalogProducts(data.products);
-        }
-      })
-      .catch(() => {
-        // Fallback to initial catalog products silently
-      });
-
-    fetch("/api/admin/settings")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.club) {
-          if (data.club.ai_club_only === "false") setAiClubOnly(false);
-          if (data.club.annual_price) setClubAnnualPrice(data.club.annual_price);
-          if (data.club.monthly_price) setClubMonthlyPrice(data.club.monthly_price);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-
-  const saveLookToHistory = (items: ProductItem[], rationale: string, occasionId: string) => {
-    try {
-      const occasionObj = OCCASIONS.find((o) => o.id === occasionId);
-      const total = items.reduce((acc, it) => acc + it.price, 0);
-      const newSaved: SavedLook = {
-        id: `look-${Date.now()}`,
-        createdAt: new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long" }),
-        occasionId,
-        occasionLabel: occasionObj?.label || "Индивидуальный образ",
-        items,
-        rationale,
-        totalPrice: total,
-      };
-      const updated = [newSaved, ...savedLooks.filter((l) => l.id !== newSaved.id)].slice(0, 10);
-      setSavedLooks(updated);
-      localStorage.setItem("sabyr_stylist_history", JSON.stringify(updated));
-    } catch {
-      // Ignore
-    }
-  };
-
-  const handleShareLook = async () => {
-    const shareText = `Капсульный образ SABYR для «${OCCASIONS.find((o) => o.id === selectedOccasion)?.label}». Посмотрите подборку на sabyr.kz/ai-stylist`;
-    if (typeof navigator !== "undefined" && navigator.share) {
+function analyzePhotoMetricsClient(
+  dataUrl: string
+): Promise<{ brightness: number; contrast: number; warmth: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
       try {
-        await navigator.share({
-          title: "Образ от SABYR AI Stylist",
-          text: shareText,
-          url: window.location.href,
-        });
-        return;
+        const canvas = document.createElement("canvas");
+        const w = 80;
+        const h = 80;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve({ brightness: 125, contrast: 50, warmth: 15 });
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        const { data } = ctx.getImageData(0, 0, w, h);
+        let lumSum = 0;
+        let warmthSum = 0;
+        const lums: number[] = [];
+        const total = w * h;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          lumSum += lum;
+          warmthSum += r - b;
+          lums.push(lum);
+        }
+
+        const brightness = Math.round(lumSum / total);
+        const warmth = Math.round(warmthSum / total);
+        let varianceSum = 0;
+        for (const l of lums) {
+          varianceSum += (l - brightness) * (l - brightness);
+        }
+        const contrast = Math.round(Math.sqrt(varianceSum / total));
+        resolve({ brightness, contrast, warmth });
       } catch {
-        // Fallback to clipboard
+        resolve({ brightness: 125, contrast: 50, warmth: 15 });
       }
-    }
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopiedShare(true);
-      setTimeout(() => setCopiedShare(false), 2500);
-    }
-  };
+    };
+    img.onerror = () => resolve({ brightness: 125, contrast: 50, warmth: 15 });
+    img.src = dataUrl;
+  });
+}
 
+export default function AIStylistPage() {
+  const router = useRouter();
+  const [catalogProducts, setCatalogProducts] = useState<ProductItem[]>([]);
+  const [selectedSize, setSelectedSize] = useState("M");
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setUserPhoto(url);
-    }
-  };
+  // User photo & camera state
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraCountdown, setCameraCountdown] = useState<number | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
-  const handleGenerate = async () => {
-    setStep("loading");
+  // AI Stylist Results
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [appearanceProfile, setAppearanceProfile] = useState<AppearanceProfile | null>(null);
+  const [outfits, setOutfits] = useState<CuratedOutfit[]>([]);
+  const [addedOutfitId, setAddedOutfitId] = useState<string | null>(null);
 
+  // Club access lock state
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [hasClubAccess, setHasClubAccess] = useState(false);
+  const [clubPrice, setClubPrice] = useState(150000);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const addItem = useCartStore((state) => state.addItem);
+  const openCart = useCartStore((state) => state.openCart);
+
+  const runPhotoStylistAnalysis = useCallback(async (photoBase64: string) => {
+    setIsAnalyzing(true);
     try {
+      const metrics = await analyzePhotoMetricsClient(photoBase64);
       const res = await fetch("/api/ai/stylist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          occasion: selectedOccasion,
-          style: selectedStyle,
-          palette: selectedPalette,
-          size: selectedSize,
-          query: userQuery,
+          userPhotoBase64: photoBase64,
+          photoMetrics: metrics,
         }),
       });
       const data = await res.json();
-      if (data.success && Array.isArray(data.items) && data.items.length > 0) {
-        setLookItems(data.items);
-        setAiRationale(data.rationale);
-        saveLookToHistory(data.items, data.rationale, selectedOccasion);
-        setStep("result");
-        return;
+      if (data.appearanceProfile) {
+        setAppearanceProfile(data.appearanceProfile);
+      }
+      if (Array.isArray(data.outfits) && data.outfits.length > 0) {
+        setOutfits(data.outfits);
       }
     } catch {
-      // Fallback to local curated catalog matching
+      // handled gracefully by fallback
+    } finally {
+      setIsAnalyzing(false);
     }
+  }, []);
 
-    // Curated catalog engine matching ONLY from live catalog database (including admin items)
-    const available = catalogProducts.filter((p) => p.variants.some((v) => v.stock > 0));
-    let selected: ProductItem[] = [];
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/auth/me").then((r) => r.json()).catch(() => ({ user: null })),
+      fetch("/api/club").then((r) => r.json()).catch(() => ({ settings: {} })),
+      fetch("/api/products").then((r) => r.json()).catch(() => ({ products: [] })),
+    ]).then(([authData, clubData, prodData]) => {
+      const user = authData?.user;
+      const aiClubOnly = clubData?.settings?.ai_club_only !== "false";
+      if (clubData?.settings?.annual_price) {
+        setClubPrice(Number(clubData.settings.annual_price));
+      }
+      const allowed = Boolean(!aiClubOnly || (user && (user.isClubMember || user.role === "ADMIN")));
+      setHasClubAccess(allowed);
+      setAccessChecked(true);
 
-    if (selectedOccasion === "interview" || selectedOccasion === "business") {
-      selected = available.filter((p) =>
-        p.category.includes("Пиджаки") ||
-        p.category.includes("Брюки") ||
-        p.category.includes("Рубашки") ||
-        p.occasionTags.includes("деловая встреча")
-      ).slice(0, 4);
-      setAiRationale(
-        "Образ подобран исключительно из каталога SABYR с учетом делового дресс-кода: баланс архитектурной строгости жакета, комфортной посадки брюк и чистоты линий."
-      );
-    } else if (selectedOccasion === "wedding" || selectedOccasion === "party") {
-      selected = available.filter((p) =>
-        p.category.includes("Платья") ||
-        p.category.includes("Пальто") ||
-        p.occasionTags.includes("свадьба / той")
-      ).slice(0, 3);
-      setAiRationale(
-        "Вечерний торжественный образ из актуальной коллекции: утонченный силуэт, благородные ткани и премиальная фурнитура."
-      );
-    } else {
-      selected = available.slice(0, 3);
-      setAiRationale(
-        "Функциональная капсула на каждый день из каталога SABYR: проверенные силуэты, гармонирующие между собой."
+      if (prodData?.products?.length > 0) {
+        setCatalogProducts(prodData.products);
+      }
+
+      if (allowed) {
+        try {
+          const savedPhoto = sessionStorage.getItem("sabyr_user_photo");
+          if (savedPhoto) {
+            setUserPhoto(savedPhoto);
+            runPhotoStylistAnalysis(savedPhoto);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    });
+  }, [runPhotoStylistAnalysis]);
+
+  // Stop camera on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1080 }, height: { ideal: 1440 } },
+        audio: false,
+      });
+      setCameraActive(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 80);
+    } catch {
+      setCameraError(
+        "Не удалось включить камеру в браузере. Проверьте доступ к камере или загрузите готовое фото."
       );
     }
-
-    if (selected.length === 0) selected = available.slice(0, 3);
-    setLookItems(selected);
-    saveLookToHistory(selected, aiRationale, selectedOccasion);
-    setStep("result");
   };
 
-  const loadSavedLook = (look: SavedLook) => {
-    setLookItems(look.items);
-    setAiRationale(look.rationale);
-    setSelectedOccasion(look.occasionId);
-    setShowHistory(false);
-    setStep("result");
-  };
-
-
-  const handleSwapItem = (index: number) => {
-    // Pick another available item strictly from current catalog database
-    const currentItem = lookItems[index];
-    const alternates = catalogProducts.filter((p) => p.id !== currentItem.id && p.variants.some((v) => v.stock > 0));
-    if (alternates.length > 0) {
-      const sameCategoryAlternates = alternates.filter((p) => p.category === currentItem.category);
-      const pool = sameCategoryAlternates.length > 0 ? sameCategoryAlternates : alternates;
-      const nextIndex = (index + 1) % pool.length;
-      const nextItem = pool[nextIndex];
-      const updated = [...lookItems];
-      updated[index] = nextItem;
-      setLookItems(updated);
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach((t) => t.stop());
+      videoRef.current.srcObject = null;
     }
+    setCameraActive(false);
+    setCameraCountdown(null);
   };
 
-  const handleAddAllToCart = () => {
-    lookItems.forEach((item) => {
-      const variant = item.variants.find((v) => v.size === selectedSize && v.stock > 0) || item.variants[0];
+  const captureFromCamera = (withTimer = false) => {
+    if (!videoRef.current) return;
+
+    const doCapture = () => {
+      const video = videoRef.current;
+      if (!video) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 720;
+      canvas.height = video.videoHeight || 960;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const base64 = canvas.toDataURL("image/jpeg", 0.9);
+      setUserPhoto(base64);
+      try {
+        sessionStorage.setItem("sabyr_user_photo", base64);
+      } catch {
+        // ignore
+      }
+      stopCamera();
+      runPhotoStylistAnalysis(base64);
+    };
+
+    if (!withTimer) {
+      doCapture();
+      return;
+    }
+
+    setCameraCountdown(3);
+    let count = 3;
+    const interval = setInterval(() => {
+      count -= 1;
+      if (count <= 0) {
+        clearInterval(interval);
+        setCameraCountdown(null);
+        doCapture();
+      } else {
+        setCameraCountdown(count);
+      }
+    }, 1000);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      setUserPhoto(base64);
+      try {
+        sessionStorage.setItem("sabyr_user_photo", base64);
+      } catch {
+        // ignore
+      }
+      runPhotoStylistAnalysis(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddOutfitToCart = (outfit: CuratedOutfit) => {
+    outfit.items.forEach((product) => {
       addItem({
-        id: item.id,
-        productId: item.id,
-        variantId: variant.id,
-        name: item.name,
-        price: item.price,
-        image: item.images[0],
-        color: variant.color,
-        size: variant.size,
+        productId: product.id,
+        variantId: `${product.id}-${selectedSize}`,
+        name: product.name,
+        price: product.price,
+        size: selectedSize,
+        color: product.variants[0]?.color || "Стандарт",
+        image: product.images[0],
+        slug: product.slug,
         quantity: 1,
-        slug: item.slug,
       });
     });
-
-    setAddedAllToCart(true);
-    setTimeout(() => {
-      openCart();
-      setAddedAllToCart(false);
-    }, 800);
+    setAddedOutfitId(outfit.id);
+    openCart();
+    setTimeout(() => setAddedOutfitId(null), 2500);
   };
 
-  const totalLookPrice = lookItems.reduce((acc, it) => acc + it.price, 0);
+  const handleTryOnOutfit = (outfit: CuratedOutfit) => {
+    const primary = outfit.items[0];
+    const secondary = outfit.items[1];
+    if (!primary) return;
+    const params = new URLSearchParams({
+      productId: primary.id,
+      autoTryOn: "1",
+    });
+    if (secondary) {
+      params.set("secondProductId", secondary.id);
+    }
+    router.push(`/ai-tryon?${params.toString()}`);
+  };
 
-  if (isLoading) {
+  const handleSwapItemInOutfit = (outfitId: string, itemIndex: number) => {
+    if (catalogProducts.length === 0) return;
+    setOutfits((prev) =>
+      prev.map((o) => {
+        if (o.id !== outfitId) return o;
+        const currentItem = o.items[itemIndex];
+        const otherIds = o.items.map((i) => i.id);
+        const candidates = catalogProducts.filter((p) => !otherIds.includes(p.id));
+        if (candidates.length === 0) return o;
+        const nextCandidate =
+          candidates.find((p) => p.category === currentItem?.category) || candidates[0];
+        const nextItems = [...o.items];
+        nextItems[itemIndex] = nextCandidate;
+        return { ...o, items: nextItems };
+      })
+    );
+  };
+
+  if (!accessChecked) {
     return (
-      <main className="min-h-screen pb-24 bg-[#0A0A0A] text-white flex items-center justify-center px-4 pt-20">
-        <div className="text-center space-y-3">
-          <Crown className="w-8 h-8 text-[#C9A84C] mx-auto animate-pulse" />
-          <p className="text-xs uppercase tracking-[0.2em] text-white/60">
-            Проверка членства SABYR CLUB...
-          </p>
-        </div>
-      </main>
+      <div className="min-h-screen bg-[#FAF8F5] pt-24 pb-20 flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   if (!hasClubAccess) {
     return (
-      <main className="min-h-screen pb-24 bg-[#0A0A0A] text-white flex items-center justify-center px-4 pt-20">
-        <div className="max-w-xl w-full rounded-3xl border border-[#C9A84C]/30 bg-gradient-to-b from-[#141414] to-[#0A0A0A] p-8 md:p-12 text-center space-y-6 shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-[#C9A84C]/15 border border-[#C9A84C]/40 flex items-center justify-center mx-auto">
-            <Crown className="w-8 h-8 text-[#C9A84C]" />
-          </div>
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-[#C9A84C]/30 text-[#C9A84C] text-[11px] font-semibold uppercase tracking-[0.18em]">
-            <Lock className="w-3 h-3" />
-            Только в закрытом клубе SABYR CLUB
-          </div>
-          <h1 className="font-serif text-3xl md:text-4xl font-light tracking-wide text-white">
-            Персональный AI-Стилист и AI-Подбор образов
+      <div className="min-h-screen bg-[#FAF8F5] pt-28 pb-20 px-4 flex items-center justify-center">
+        <div className="max-w-xl w-full bg-[#121212] text-[#F7F5F0] p-8 md:p-12 border border-[#C5A059]/40 shadow-2xl text-center">
+          <span className="inline-block text-[10px] uppercase tracking-[0.3em] text-[#C5A059] border border-[#C5A059]/40 px-3 py-1 mb-5">
+            Привилегия SABYR CLUB
+          </span>
+          <h1 className="font-serif text-3xl md:text-4xl mb-4">
+            Персональный AI-Стилист по фото закрыт
           </h1>
-          <p className="text-white/70 text-sm md:text-base leading-relaxed font-light">
-            Индивидуальный нейросетевой подбор капсульного гардероба и виртуальная примерочная доступны исключительно резидентам закрытого клуба <strong className="text-[#C9A84C] font-semibold">SABYR CLUB</strong>.
+          <p className="text-sm text-[#A09C94] leading-relaxed mb-8">
+            Мгновенный подбор топ-образов по вашей фотографии без анкет и опросов доступен только
+            резидентам закрытого клуба SABYR CLUB.
           </p>
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs text-white/80 space-y-1">
-            <p className="font-semibold text-[#C9A84C] uppercase tracking-wider">Тарифы членства SABYR CLUB</p>
-            <p>Месячная подписка: <strong className="text-white">{clubMonthlyPrice}</strong> · Годовая карта: <strong className="text-white">{clubAnnualPrice}</strong></p>
+          <div className="bg-[#1A1A1A] border border-[#2C2C2C] p-5 mb-8 text-left space-y-2 text-xs text-[#D5D0C5]">
+            <p className="text-[#C5A059] uppercase tracking-widest text-[10px] font-medium mb-2">
+              Что открывает статус резидента ({clubPrice.toLocaleString("ru-KZ")} ₸ / год):
+            </p>
+            <p>— Автоматический подбор 3 лучших образов из всей коллекции по одному вашему селфи</p>
+            <p>— 3D AI-Примерочная с одеванием вещей прямо на ваше фото</p>
+            <p>— Доступ к лимитированным костюмам и закрытым дропам SABYR</p>
           </div>
-          <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/club"
-              className="px-7 py-3.5 rounded-full bg-[#C9A84C] text-black text-xs font-bold uppercase tracking-[0.14em] hover:opacity-90 transition-opacity"
+              className="px-8 py-4 bg-[#C5A059] text-[#121212] text-xs uppercase tracking-[0.2em] font-medium hover:bg-[#d4b06a] transition-colors"
             >
               Вступить в SABYR CLUB
             </Link>
-            {isGuest && (
-              <Link
-                href="/account"
-                className="px-7 py-3.5 rounded-full border border-white/20 text-white text-xs font-semibold uppercase tracking-[0.14em] hover:bg-white/10 transition-colors"
-              >
-                Войти в аккаунт
-              </Link>
-            )}
+            <Link
+              href="/login"
+              className="px-8 py-4 border border-[#3A3A3A] text-[#F7F5F0] text-xs uppercase tracking-[0.2em] hover:border-[#C5A059] transition-colors"
+            >
+              Войти в аккаунт
+            </Link>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen pb-24">
-      {/* Hero Header */}
-      <section className="bg-sabyr-black text-white pt-12 pb-16 border-b border-white/10">
-        <div className="container max-w-4xl text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-[hsl(var(--accent))] text-xs font-semibold uppercase tracking-wider mb-4">
-            <Sparkles className="w-3.5 h-3.5" />
-            Интеллектуальный Стилист <span className="font-brand tracking-[0.15em]">SABYR</span>
+    <div className="min-h-screen bg-[#FAF8F5] pt-24 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center max-w-3xl mx-auto mb-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#1A1A1A] text-[#F7F5F0] text-[10px] tracking-[0.25em] uppercase mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]" />
+            SABYR AI Vision Stylist
           </div>
-          <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl font-light tracking-wide mb-4 text-white">
-            Персональный гардеробный образ за пару кликов
+          <h1 className="font-serif text-3xl md:text-5xl text-[#1A1A1A] tracking-tight mb-3">
+            Сфотографируйтесь — AI сам подберёт вам топ-образы
           </h1>
-          <p className="text-white/75 text-base md:text-lg max-w-2xl mx-auto leading-relaxed font-light">
-            ИИ подбирает гармоничный образ исключительно из коллекции <span className="font-brand tracking-[0.16em] text-white">SABYR</span>, сверяясь с остатками на складе в режиме реального времени.
+          <p className="text-[#6E6A63] text-sm md:text-base leading-relaxed">
+            Никаких анкет и сложных вопросов. Просто сделайте фото с камеры или загрузите снимок:
+            искусственный интеллект определит ваш типаж, контрастность и соберёт 3 лучших образа из
+            всей коллекции SABYR.
           </p>
+        </div>
 
-          {savedLooks.length > 0 && (
-            <div className="flex justify-center mt-6">
+        {/* PHOTO CAPTURE & APPEARANCE ANALYSIS PANEL */}
+        <div className="bg-white border border-[#E8E3DA] p-6 md:p-10 mb-12 shadow-sm">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Left: Camera / Photo Box (5 cols) */}
+            <div className="lg:col-span-5">
+              <div className="relative aspect-[3/4] w-full max-w-md mx-auto bg-[#141414] border border-[#E8E3DA] overflow-hidden">
+                {/* Live Camera Stream */}
+                {cameraActive && (
+                  <div className="relative w-full h-full">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover scale-x-[-1]"
+                    />
+                    <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                      <div className="w-28 h-36 rounded-full border-2 border-dashed border-[#C5A059]/80 mb-3" />
+                      <span className="px-3 py-1 bg-black/75 text-[#F7F5F0] text-[10px] uppercase tracking-widest">
+                        Смотрите в камеру при хорошем освещении
+                      </span>
+                    </div>
+
+                    {cameraCountdown !== null && (
+                      <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
+                        <span className="font-serif text-7xl text-white font-bold">
+                          {cameraCountdown}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-4 inset-x-4 flex gap-2 justify-center">
+                      <button
+                        type="button"
+                        onClick={() => captureFromCamera(false)}
+                        className="px-6 py-3 bg-[#C5A059] text-[#121212] text-xs uppercase tracking-widest font-medium hover:bg-[#d4b06a]"
+                      >
+                        Сфоткаться
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => captureFromCamera(true)}
+                        className="px-4 py-3 bg-black/80 text-white border border-white/30 text-xs uppercase tracking-widest"
+                      >
+                        Таймер 3 сек
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopCamera}
+                        className="px-3 py-3 bg-red-800/90 text-white text-xs uppercase tracking-widest"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Uploaded / Captured Photo */}
+                {!cameraActive && userPhoto && (
+                  <div className="relative w-full h-full">
+                    <img
+                      src={userPhoto}
+                      alt="Ваше фото для AI-стилиста"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-3 left-3 bg-[#121212]/85 text-[#C5A059] px-3 py-1.5 text-[10px] uppercase tracking-widest">
+                      Фото проанализировано AI
+                    </div>
+                    {isAnalyzing && (
+                      <div className="absolute inset-0 bg-[#121212]/75 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center">
+                        <div className="w-12 h-12 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin mb-4" />
+                        <p className="font-serif text-xl mb-1">
+                          AI анализирует ваш типаж и подбирает одежду...
+                        </p>
+                        <p className="text-xs text-[#C5A059] uppercase tracking-widest">
+                          Сканирование всех капсул каталога SABYR
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {!cameraActive && !userPhoto && (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 bg-[#FAF8F5]">
+                    <div className="w-20 h-20 border border-[#C5A059] flex items-center justify-center mb-5 text-xs uppercase tracking-widest text-[#C5A059]">
+                      AI SCAN
+                    </div>
+                    <h3 className="font-serif text-2xl text-[#1A1A1A] mb-2">
+                      Сделайте селфи или загрузите фото
+                    </h3>
+                    <p className="text-xs text-[#6E6A63] max-w-xs mb-6 leading-relaxed">
+                      Вам не нужно ничего выбирать вручную — AI сам оценит ваш цветотип и соберёт
+                      лучшие комплекты из всех костюмов, рубашек, поло и брюк SABYR.
+                    </p>
+                    <div className="flex flex-col gap-3 w-full max-w-xs">
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="w-full py-4 bg-[#1A1A1A] text-white text-xs uppercase tracking-[0.2em] font-medium hover:bg-[#333] transition-colors"
+                      >
+                        Включить камеру и сфоткаться
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full py-4 border border-[#1A1A1A] text-[#1A1A1A] text-xs uppercase tracking-[0.2em] hover:bg-white transition-colors"
+                      >
+                        Загрузить готовое фото
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
+              {cameraError && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-300 text-xs text-amber-900">
+                  {cameraError}
+                </div>
+              )}
+            </div>
+
+            {/* Right: AI Appearance Profile & Action Controls (7 cols) */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#E8E3DA]">
+                <div>
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-[#C5A059] block mb-1">
+                    Персональное досье стиля
+                  </span>
+                  <h2 className="font-serif text-2xl md:text-3xl text-[#1A1A1A]">
+                    {appearanceProfile
+                      ? "Результаты AI-сканирования вашей внешности"
+                      : "Ожидание вашей фотографии"}
+                  </h2>
+                </div>
+
+                {userPhoto && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="px-4 py-2.5 bg-[#1A1A1A] text-white text-xs uppercase tracking-widest hover:bg-[#333]"
+                    >
+                      Переснять с камеры
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-4 py-2.5 border border-[#1A1A1A] text-[#1A1A1A] text-xs uppercase tracking-widest hover:bg-[#FAF8F5]"
+                    >
+                      Другое фото
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {appearanceProfile ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-[#FAF8F5] border border-[#E8E3DA] p-5">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#8C857B] block mb-1">
+                      Определённый типаж
+                    </span>
+                    <p className="font-serif text-lg text-[#1A1A1A] mb-1">
+                      {appearanceProfile.colorType}
+                    </p>
+                    <p className="text-xs text-[#6E6A63] leading-relaxed">
+                      {appearanceProfile.contrastLevel}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#FAF8F5] border border-[#E8E3DA] p-5">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#8C857B] block mb-1">
+                      Идеальная палитра SABYR
+                    </span>
+                    <p className="font-serif text-lg text-[#1A1A1A] mb-1">
+                      Рекомендованные оттенки
+                    </p>
+                    <p className="text-xs text-[#6E6A63] leading-relaxed">
+                      {appearanceProfile.bestPalette}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#FAF8F5] border border-[#E8E3DA] p-5 md:col-span-2">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#8C857B] block mb-1">
+                      Архитектура кроя и посадка
+                    </span>
+                    <p className="text-sm text-[#1A1A1A] leading-relaxed">
+                      {appearanceProfile.silhouetteAdvice}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-[#FAF8F5] border border-[#E8E3DA] p-6 space-y-3 text-sm text-[#6E6A63]">
+                  <p className="text-[#1A1A1A] font-medium">
+                    Как работает AI-Стилист по вашему фото:
+                  </p>
+                  <p>
+                    1. Вы фотографируетесь на веб-камеру / фронтальную камеру или загружаете любое
+                    своё фото.
+                  </p>
+                  <p>
+                    2. Алгоритм анализирует тон кожи, контрастность и пропорции плечевого пояса.
+                  </p>
+                  <p>
+                    3. Из всех вещей каталога SABYR автоматически собираются 3 готовых топ-образа,
+                    которые вы можете в один клик примерить прямо на своё фото!
+                  </p>
+                </div>
+              )}
+
+              {/* Global Size Selector for adding outfits to cart */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs uppercase tracking-wider text-[#6E6A63]">
+                    Ваш размер для заказа и 3D-примерки:
+                  </span>
+                  <span className="text-xs text-[#C5A059]">Полная сетка S – 3XL</span>
+                </div>
+                <div className="grid grid-cols-6 gap-2 max-w-md">
+                  {["S", "M", "L", "XL", "2XL", "3XL"].map((sz) => (
+                    <button
+                      key={sz}
+                      type="button"
+                      onClick={() => setSelectedSize(sz)}
+                      className={`py-2.5 text-xs font-medium border transition-all ${
+                        selectedSize === sz
+                          ? "border-[#1A1A1A] bg-[#1A1A1A] text-white"
+                          : "border-[#E8E3DA] bg-white text-[#1A1A1A] hover:border-[#1A1A1A]"
+                      }`}
+                    >
+                      {sz}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* TOP-3 CURATED OUTFITS SECTION */}
+        {outfits.length > 0 && (
+          <div className="space-y-10">
+            <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-[#E8E3DA] pb-5 gap-4">
+              <div>
+                <span className="text-[11px] uppercase tracking-[0.25em] text-[#C5A059] block mb-1">
+                  Персональная селекция из всего каталога
+                </span>
+                <h2 className="font-serif text-3xl md:text-4xl text-[#1A1A1A]">
+                  Топ-3 образа специально для вас
+                </h2>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowHistory(!showHistory)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/20 text-xs text-white/90 hover:bg-white/10 transition-colors"
+                onClick={() => userPhoto && runPhotoStylistAnalysis(userPhoto)}
+                disabled={isAnalyzing}
+                className="self-start md:self-auto px-5 py-2.5 border border-[#1A1A1A] text-xs uppercase tracking-widest text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors"
               >
-                <History className="w-3.5 h-3.5 text-[hsl(var(--accent))]" />
-                {showHistory ? "Скрыть историю образов" : `История сохранённых образов (${savedLooks.length})`}
+                {isAnalyzing ? "Обновление..." : "Пересобрать топ-образы"}
               </button>
             </div>
-          )}
-        </div>
-      </section>
 
-      {/* History Drawer / Panel */}
-      {showHistory && savedLooks.length > 0 && (
-        <div className="bg-secondary/40 border-b border-border py-8">
-          <div className="container max-w-4xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <BookmarkCheck className="w-4 h-4 text-[hsl(var(--accent))]" /> Ваши сохранённые капсулы
-              </h3>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Закрыть
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {savedLooks.map((look) => (
-                <div
-                  key={look.id}
-                  onClick={() => loadSavedLook(look)}
-                  className="p-4 rounded-xl border border-border bg-card hover:border-foreground/50 transition-all cursor-pointer space-y-3"
-                >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-foreground">{look.occasionLabel}</span>
-                    <span className="text-muted-foreground">{look.createdAt}</span>
-                  </div>
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    {look.items.map((it, idx) => (
-                      <div key={idx} className="relative w-12 h-16 rounded bg-secondary overflow-hidden flex-shrink-0">
-                        <Image src={it.images[0]} alt={it.name} fill sizes="48px" className="object-cover" />
+            <div className="space-y-8">
+              {outfits.map((outfit) => {
+                const totalOutfitPrice = outfit.items.reduce((acc, p) => acc + p.price, 0);
+                return (
+                  <div
+                    key={outfit.id}
+                    className="bg-white border border-[#E8E3DA] p-6 md:p-8 shadow-sm"
+                  >
+                    {/* Outfit Header */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 mb-6 border-b border-[#E8E3DA]">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2.5 mb-2">
+                          <span className="px-3 py-1 bg-[#1A1A1A] text-[#C5A059] text-[10px] uppercase tracking-[0.2em] font-medium">
+                            {outfit.badge}
+                          </span>
+                          <span className="px-3 py-1 bg-[#FAF8F5] border border-[#E8E3DA] text-[#1A1A1A] text-[10px] uppercase tracking-widest font-medium">
+                            Совпадение с вашим фото: {outfit.matchScore}%
+                          </span>
+                        </div>
+                        <h3 className="font-serif text-2xl md:text-3xl text-[#1A1A1A]">
+                          {outfit.title}
+                        </h3>
                       </div>
-                    ))}
-                    <div className="ml-auto text-right">
-                      <span className="text-[10px] text-muted-foreground">Итого:</span>
-                      <p className="font-bold text-xs">{formatPrice(look.totalPrice)}</p>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleTryOnOutfit(outfit)}
+                          className="px-6 py-3.5 bg-[#1A1A1A] text-white text-xs uppercase tracking-[0.18em] font-medium hover:bg-[#333333] transition-colors"
+                        >
+                          Надеть этот образ на моё фото (AI-Примерка)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAddOutfitToCart(outfit)}
+                          className="px-6 py-3.5 bg-[#C5A059] text-[#121212] text-xs uppercase tracking-[0.18em] font-medium hover:bg-[#d4b06a] transition-colors"
+                        >
+                          {addedOutfitId === outfit.id
+                            ? "Образ добавлен в корзину"
+                            : `Купить весь образ (${totalOutfitPrice.toLocaleString("ru-KZ")} ₸)`}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Stylist Rationale & Tip */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-[#FAF8F5] border border-[#E8E3DA] p-4">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-widest text-[#8C857B] block mb-1">
+                          Почему AI выбрал этот образ под ваше фото:
+                        </span>
+                        <p className="text-xs md:text-sm text-[#1A1A1A] leading-relaxed">
+                          {outfit.rationale}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase tracking-widest text-[#C5A059] block mb-1">
+                          Рекомендация по стилизации:
+                        </span>
+                        <p className="text-xs md:text-sm text-[#6E6A63] leading-relaxed">
+                          {outfit.stylingTip}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Items in this Outfit */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {outfit.items.map((product, idx) => (
+                        <div
+                          key={`${outfit.id}-${product.id}`}
+                          className="border border-[#E8E3DA] bg-[#FAF8F5] flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="relative aspect-[3/4] bg-[#F2EFE9] overflow-hidden">
+                              <img
+                                src={product.images[0]}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                              />
+                              <span className="absolute top-3 left-3 bg-[#121212]/85 text-white px-2.5 py-1 text-[10px] uppercase tracking-widest">
+                                Изделие {idx + 1} · {product.category}
+                              </span>
+                            </div>
+                            <div className="p-4">
+                              <Link
+                                href={`/product/${product.slug}`}
+                                className="font-serif text-lg text-[#1A1A1A] hover:text-[#C5A059] transition-colors block mb-1"
+                              >
+                                {product.name}
+                              </Link>
+                              <p className="text-sm font-medium text-[#1A1A1A] mb-2">
+                                {product.price.toLocaleString("ru-KZ")} ₸ · Размер {selectedSize}
+                              </p>
+                              <p className="text-xs text-[#6E6A63] line-clamp-2">
+                                {product.aiDescription || product.description}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-4 pt-0 flex gap-2">
+                            <Link
+                              href={`/ai-tryon?productId=${product.id}&autoTryOn=1`}
+                              className="flex-1 py-2.5 bg-[#1A1A1A] text-white text-center text-[10px] uppercase tracking-widest hover:bg-[#333]"
+                            >
+                              Примерить на себя
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleSwapItemInOutfit(outfit.id, idx)}
+                              className="px-3 py-2.5 border border-[#D5CFC4] text-[10px] uppercase tracking-widest text-[#6E6A63] hover:text-[#1A1A1A] hover:border-[#1A1A1A]"
+                            >
+                              Заменить
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Content Form */}
-      <div className="container max-w-4xl pt-10">
-        <AnimatePresence mode="wait">
-
-          {step === "form" && (
-            <motion.div
-              key="form"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              className="space-y-10"
-            >
-              {/* Photo Upload (Optional) */}
-              <div className="border border-dashed border-border rounded-2xl p-6 text-center bg-card">
-                <div className="max-w-md mx-auto">
-                  {userPhoto ? (
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-foreground">
-                        <Image src={userPhoto} alt="User" fill className="object-cover" />
-                      </div>
-                      <p className="text-sm font-medium">Фото загружено и готово к анализу цветотипа</p>
-                      <button
-                        onClick={() => setUserPhoto(null)}
-                        className="text-xs text-muted-foreground hover:text-red-500 underline"
-                      >
-                        Удалить фото
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mx-auto mb-3">
-                        <Camera className="w-6 h-6 text-foreground" />
-                      </div>
-                      <h3 className="font-semibold text-base mb-1">Загрузите ваше фото (по желанию)</h3>
-                      <p className="text-xs text-muted-foreground mb-4">
-                        ИИ определит контрастность внешности и подберёт комплементарную палитру
-                      </p>
-                      <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-border rounded-full text-xs font-medium hover:bg-secondary transition-colors">
-                        <span>Выбрать снимок</span>
-                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-                      </label>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Occasion Selection */}
-              <div>
-                <label className="block text-sm font-semibold mb-3">
-                  1. Куда вы собираетесь? <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {OCCASIONS.map((occ) => {
-                    const Icon = occ.icon;
-                    return (
-                      <button
-                        key={occ.id}
-                        onClick={() => setSelectedOccasion(occ.id)}
-                        className={`text-left p-4 rounded-xl border transition-all ${
-                          selectedOccasion === occ.id
-                            ? "border-foreground bg-secondary/50 shadow-sm"
-                            : "border-border hover:border-foreground/40 bg-card"
-                        }`}
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-secondary/80 flex items-center justify-center mb-2.5 text-foreground">
-                          <Icon className="w-4 h-4 stroke-[1.5]" />
-                        </div>
-                        <span className="font-medium text-sm block">{occ.label}</span>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{occ.note}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Style Selection */}
-              <div>
-                <label className="block text-sm font-semibold mb-3">2. Желаемый стиль</label>
-                <div className="flex flex-wrap gap-2.5">
-                  {STYLES.map((st) => (
-                    <button
-                      key={st.id}
-                      onClick={() => setSelectedStyle(st.id)}
-                      className={`px-4 py-2.5 rounded-full text-sm font-medium border transition-all ${
-                        selectedStyle === st.id
-                          ? "bg-foreground text-background border-foreground"
-                          : "border-border bg-card hover:border-foreground/50"
-                      }`}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Color Palettes */}
-              <div>
-                <label className="block text-sm font-semibold mb-3">3. Цветовые предпочтения</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {COLOR_PALETTES.map((pal) => (
-                    <button
-                      key={pal.id}
-                      onClick={() => setSelectedPalette(pal.id)}
-                      className={`p-3.5 rounded-xl border text-left flex items-center justify-between ${
-                        selectedPalette === pal.id
-                          ? "border-foreground bg-secondary/40"
-                          : "border-border bg-card hover:border-foreground/40"
-                      }`}
-                    >
-                      <span className="text-xs font-medium">{pal.label}</span>
-                      <div className="flex -space-x-1">
-                        {pal.colors.map((c, i) => (
-                          <div
-                            key={i}
-                            className="w-4 h-4 rounded-full border border-border"
-                            style={{ backgroundColor: c }}
-                          />
-                        ))}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Size & Free Query */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Ваш размер одежды</label>
-                  <div className="flex gap-1.5">
-                    {SIZES.map((sz) => (
-                      <button
-                        key={sz}
-                        onClick={() => setSelectedSize(sz)}
-                        className={`flex-1 py-2 text-xs font-medium border rounded-lg ${
-                          selectedSize === sz
-                            ? "bg-foreground text-background border-foreground"
-                            : "border-border hover:border-foreground"
-                        }`}
-                      >
-                        {sz}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-semibold mb-2">Дополнительные пожелания стилисту</label>
-                  <input
-                    type="text"
-                    value={userQuery}
-                    onChange={(e) => setUserQuery(e.target.value)}
-                    placeholder="Например: 'Хочу выглядеть строго, но свободно, без каблука'"
-                    className="w-full px-3.5 py-2.5 text-sm border border-border rounded-lg bg-card focus:outline-none focus:border-foreground"
-                  />
-                </div>
-              </div>
-
-              {/* Submit CTA */}
-              <div className="pt-4">
-                <button
-                  onClick={handleGenerate}
-                  className="w-full h-14 bg-foreground text-background font-medium rounded-full text-base flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-lg"
-                >
-                  <Sparkles className="w-5 h-5 text-[hsl(var(--accent))]" />
-                  Собрать образ из каталога SABYR
-                </button>
-                <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground">
-                  <ShieldCheck className="w-4 h-4 text-green-600" />
-                  Все рекомендованные вещи есть в наличии в выбранном размере
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {step === "loading" && (
-            <motion.div
-              key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="py-24 text-center space-y-6"
-            >
-              <div className="relative w-16 h-16 mx-auto">
-                <div className="w-16 h-16 rounded-full border-2 border-border border-t-foreground animate-spin" />
-                <Sparkles className="w-6 h-6 absolute inset-0 m-auto text-[hsl(var(--accent))]" />
-              </div>
-              <h3 className="text-xl font-bold">ИИ-стилист SABYR собирает ваш образ...</h3>
-              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                Анализируем контекст события, правила пропорций, текстурную гармонию и актуальные остатки на складе
-              </p>
-            </motion.div>
-          )}
-
-          {step === "result" && (
-            <motion.div
-              key="result"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-8"
-            >
-              {/* Header Navigation & Share */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border">
-                <button
-                  onClick={() => setStep("form")}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors py-1"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" />
-                  Изменить параметры запроса
-                </button>
-
-                <button
-                  onClick={handleShareLook}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-border bg-card text-xs font-medium hover:bg-secondary transition-all shadow-xs"
-                >
-                  <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
-                  {copiedShare ? "Ссылка скопирована!" : "Поделиться образом"}
-                </button>
-              </div>
-
-              {/* AI Explanation Banner */}
-              <div className="p-6 bg-secondary/50 border border-border rounded-2xl space-y-2">
-                <div className="flex items-center gap-2 text-xs font-semibold tracking-wider uppercase text-foreground/70">
-                  <Sparkles className="w-4 h-4 text-[hsl(var(--accent))] flex-shrink-0" />
-                  Рекомендация экспертного стилиста SABYR
-                </div>
-                <p className="text-sm md:text-base leading-relaxed text-foreground">
-                  {aiRationale}
-                </p>
-              </div>
-
-              {/* Look Items Grid */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-lg font-bold">Вещи в капсуле ({lookItems.length})</h2>
-                  <span className="text-xs text-muted-foreground flex-shrink-0">Размер: {selectedSize}</span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {lookItems.map((item, idx) => (
-                    <div
-                      key={item.id + idx}
-                      className="p-4 border border-border rounded-xl bg-card flex gap-4 items-center justify-between"
-                    >
-                      <div className="flex gap-3 items-center min-w-0 flex-1">
-                        <div className="relative w-16 h-20 rounded-lg overflow-hidden bg-secondary flex-shrink-0">
-                          <Image
-                            src={item.images[0]}
-                            alt={item.name}
-                            fill
-                            sizes="64px"
-                            className="object-cover"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground block truncate">
-                            {item.category}
-                          </span>
-                          <h4 className="text-sm font-medium truncate">{item.name}</h4>
-                          <p className="text-sm font-semibold mt-1 tabular-nums whitespace-nowrap">{formatPrice(item.price)}</p>
-                          <span className="inline-block px-1.5 py-0.5 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 text-[10px] rounded font-medium mt-1">
-                            В наличии
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Swap button */}
-                      <button
-                        onClick={() => handleSwapItem(idx)}
-                        title="Заменить эту вещь"
-                        className="p-2 border border-border hover:bg-secondary rounded-full text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Total & Action Bar */}
-              <div className="p-6 border border-border rounded-2xl bg-card flex flex-col md:flex-row items-center justify-between gap-4">
-                <div>
-                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Общая стоимость образа</span>
-                  <div className="text-2xl font-bold tabular-nums whitespace-nowrap">{formatPrice(totalLookPrice)}</div>
-                </div>
-
-                <div className="flex flex-wrap gap-3 w-full md:w-auto">
-                  {/* Link to AI Try-on */}
-                  <Link
-                    href={`/ai-tryon?lookId=${selectedOccasion}`}
-                    className="flex-1 md:flex-none px-4 sm:px-6 py-3.5 border border-foreground font-medium rounded-full text-xs sm:text-sm text-center leading-snug hover:bg-secondary transition-colors inline-flex items-center justify-center gap-2"
-                  >
-                    <Eye className="w-4 h-4 flex-shrink-0" />
-                    Примерить образ на себе
-                  </Link>
-
-                  {/* Add All to Cart */}
-                  <button
-                    onClick={handleAddAllToCart}
-                    className={`flex-1 md:flex-none px-4 sm:px-8 py-3.5 rounded-full font-medium text-xs sm:text-sm text-center leading-snug flex items-center justify-center gap-2 transition-all ${
-                      addedAllToCart
-                        ? "bg-green-600 text-white"
-                        : "bg-foreground text-background hover:opacity-90"
-                    }`}
-                  >
-                    {addedAllToCart ? (
-                      <>
-                        <Check className="w-4 h-4 flex-shrink-0" /> Весь образ в корзине!
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingBag className="w-4 h-4 flex-shrink-0" /> Добавить весь образ в корзину
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        )}
       </div>
-    </main>
+    </div>
   );
 }

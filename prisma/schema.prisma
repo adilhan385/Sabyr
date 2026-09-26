@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// This is your Prisma schema file for SABYR Luxury Fashion
+// Documentation: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -7,10 +7,9 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
-// ==================== USERS ====================
+// ==================== USERS & AUTH ====================
 
 model User {
   id            String    @id @default(cuid())
@@ -19,33 +18,36 @@ model User {
   name          String?
   avatar        String?
   role          Role      @default(CUSTOMER)
+  isBlocked     Boolean   @default(false)
   emailVerified DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  // Auth
+  // NextAuth relations (optional if using NextAuth)
   accounts Account[]
   sessions Session[]
 
-  // Shopping
-  orders          Order[]
-  addresses       Address[]
-  favorites       Favorite[]
-  cart            CartItem[]
+  // Shopping & Preferences
+  orders               Order[]
+  addresses            Address[]
+  favorites            Favorite[]
+  cart                 CartItem[]
+  restockNotifications RestockNotification[]
+  tryOnSessions        TryOnSession[]
 
-  // Bonuses & Club
-  bonusBalance    Int              @default(0)
-  bonusLevelId    String?
-  bonusLevel      BonusLevel?      @relation(fields: [bonusLevelId], references: [id])
-  bonusHistory    BonusTransaction[]
-  clubMembership  ClubMembership?
+  // Bonuses & SABYR Club
+  bonusBalance   Int                @default(0) // In bonus points
+  bonusLevelId   String?
+  bonusLevel     BonusLevel?        @relation(fields: [bonusLevelId], references: [id])
+  bonusHistory   BonusTransaction[]
+  clubMembership ClubMembership?
 
   // Gift cards & Promos
-  giftCards       GiftCard[]       @relation("GiftCardOwner")
-  promoUsages     PromoCodeUsage[]
+  giftCards   GiftCard[]       @relation("GiftCardOwner")
+  promoUsages PromoCodeUsage[]
 
   // Notifications
-  notifications   Notification[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -55,7 +57,6 @@ enum Role {
   ADMIN
 }
 
-// NextAuth models
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -95,22 +96,37 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// ==================== PRODUCTS ====================
+// SMS OTP Verification table for Kazakhstan (+7)
+model OtpVerification {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  attempts  Int      @default(0)
+  isUsed    Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone, isUsed, expiresAt])
+  @@map("otp_verifications")
+}
+
+// ==================== CATALOG & PRODUCTS ====================
 
 model Category {
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
   nameRu      String?
-  slug        String    @unique
+  slug        String      @unique
   description String?
   image       String?
-  order       Int       @default(0)
-  isActive    Boolean   @default(true)
+  order       Int         @default(0)
+  isActive    Boolean     @default(true)
   parentId    String?
-  parent      Category? @relation("SubCategories", fields: [parentId], references: [id])
-  children    Category[] @relation("SubCategories")
+  parent      Category?   @relation("SubCategories", fields: [parentId], references: [id])
+  children    Category[]  @relation("SubCategories")
   products    Product[]
-  createdAt   DateTime  @default(now())
+  sizeGuides  SizeGuide[]
+  createdAt   DateTime    @default(now())
 
   @@map("categories")
 }
@@ -121,32 +137,40 @@ model Product {
   slug        String   @unique
   description String?  @db.Text
   composition String?
+  care        String?
   categoryId  String
   category    Category @relation(fields: [categoryId], references: [id])
 
-  // Pricing
-  price       Float
-  comparePrice Float? // Original price (for sale items)
+  // Pricing in minor currency units (tiyn: 1 KZT = 100 tiyn, e.g. 89000 KZT = 8900000)
+  price        Int
+  comparePrice Int? // Original price in tiyn (for sale items)
 
-  // Status
-  isActive    Boolean  @default(true)
-  isNew       Boolean  @default(false)
+  // Status flags
+  isActive     Boolean @default(true)
+  isNew        Boolean @default(false)
   isBestSeller Boolean @default(false)
-  isClubOnly  Boolean  @default(false) // Only for SABYR CLUB members
+  isClubOnly   Boolean @default(false) // Only for SABYR CLUB members
 
-  // AI
-  aiDescription String? @db.Text // For AI Stylist context
+  // AI & Recommendation Context
+  aiDescription String?  @db.Text
+  occasionTags  String[]
+  styleTags     String[]
 
   // Relations
-  images      ProductImage[]
-  variants    ProductVariant[]
-  orderItems  OrderItem[]
-  cartItems   CartItem[]
-  favorites   Favorite[]
+  images               ProductImage[]
+  variants             ProductVariant[]
+  orderItems           OrderItem[]
+  cartItems            CartItem[]
+  favorites            Favorite[]
+  restockNotifications RestockNotification[]
+  tryOnSessions        TryOnSession[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@index([categoryId, isActive, price])
+  @@index([isClubOnly])
+  @@index([isNew])
   @@map("products")
 }
 
@@ -172,24 +196,65 @@ model ProductVariant {
   stock     Int     @default(0)
   sku       String? @unique
 
-  cartItems  CartItem[]
-  orderItems OrderItem[]
+  cartItems            CartItem[]
+  orderItems           OrderItem[]
+  restockNotifications RestockNotification[]
 
   @@unique([productId, color, size])
   @@map("product_variants")
 }
 
+// Size guide table for categories & products
+model SizeGuide {
+  id         String    @id @default(cuid())
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  size       String // "XS", "S", "M", "L", "XL"
+  ruSize     String // "42", "44", "46", "48", "50"
+  bust       String // "82-86"
+  waist      String // "62-66"
+  hips       String // "90-94"
+  length     String? // "115"
+  createdAt  DateTime  @default(now())
+
+  @@map("size_guides")
+}
+
+// Restock notification / Waitlist when variant is out of stock
+model RestockNotification {
+  id         String          @id @default(cuid())
+  productId  String
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId  String?
+  variant    ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  email      String?
+  phone      String?
+  userId     String?
+  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status     RestockStatus   @default(PENDING)
+  createdAt  DateTime        @default(now())
+  notifiedAt DateTime?
+
+  @@map("restock_notifications")
+}
+
+enum RestockStatus {
+  PENDING
+  NOTIFIED
+  CANCELLED
+}
+
 // ==================== CART ====================
 
 model CartItem {
-  id        String @id @default(cuid())
+  id        String         @id @default(cuid())
   userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   productId String
-  product   Product @relation(fields: [productId], references: [id])
+  product   Product        @relation(fields: [productId], references: [id])
   variantId String
   variant   ProductVariant @relation(fields: [variantId], references: [id])
-  quantity  Int    @default(1)
+  quantity  Int            @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -198,7 +263,7 @@ model CartItem {
   @@map("cart_items")
 }
 
-// ==================== ORDERS ====================
+// ==================== ORDERS & PAYMENTS ====================
 
 model Order {
   id          String      @id @default(cuid())
@@ -207,24 +272,22 @@ model Order {
   user        User        @relation(fields: [userId], references: [id])
   status      OrderStatus @default(PENDING)
 
-  // Pricing
-  subtotal    Float
-  discount    Float       @default(0)
-  bonusUsed   Int         @default(0)
-  deliveryCost Float      @default(0)
-  total       Float
-
-  // Promo / Gift
-  promoCodeId String?
-  promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id])
-  giftCardId  String?
-  giftCard    GiftCard?  @relation(fields: [giftCardId], references: [id])
-  giftCardAmount Float   @default(0)
+  // Pricing in tiyn (minor units)
+  subtotal       Int
+  discount       Int          @default(0)
+  bonusUsed      Int          @default(0) // 1 bonus = 1 KZT = 100 tiyn
+  deliveryCost   Int          @default(0)
+  total          Int
+  giftCardId     String?
+  giftCard       GiftCard?    @relation(fields: [giftCardId], references: [id])
+  giftCardAmount Int          @default(0) // in tiyn
+  promoCodeId    String?
+  promoCode      PromoCode?   @relation(fields: [promoCodeId], references: [id])
 
   // Delivery
   deliveryType DeliveryType @default(COURIER)
-  addressId   String?
-  address     Address?   @relation(fields: [addressId], references: [id])
+  addressId    String?
+  address      Address?     @relation(fields: [addressId], references: [id])
 
   // Payment
   paymentStatus PaymentStatus @default(PENDING)
@@ -235,9 +298,11 @@ model Order {
   trackingNumber String?
   notes          String?
 
-  items       OrderItem[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  items        OrderItem[]
+  transactions PaymentTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("orders")
 }
@@ -266,26 +331,49 @@ enum DeliveryType {
 }
 
 model OrderItem {
-  id        String  @id @default(cuid())
+  id        String         @id @default(cuid())
   orderId   String
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId String
-  product   Product @relation(fields: [productId], references: [id])
+  product   Product        @relation(fields: [productId], references: [id])
   variantId String
   variant   ProductVariant @relation(fields: [variantId], references: [id])
   quantity  Int
-  price     Float
+  price     Int // in tiyn
   color     String
   size      String
 
   @@map("order_items")
 }
 
+model PaymentTransaction {
+  id             String         @id @default(cuid())
+  orderId        String
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  gateway        PaymentGateway
+  paymentId      String? // External transaction ID from Kaspi/CloudPayments
+  amount         Int // In tiyn
+  status         PaymentStatus  @default(PENDING)
+  idempotencyKey String?        @unique
+  rawPayload     Json?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("payment_transactions")
+}
+
+enum PaymentGateway {
+  KASPI_QR
+  CARD_CLOUDPAYMENTS
+  FREEDOM_PAY
+  CASH_ON_DELIVERY
+}
+
 model Address {
   id         String  @id @default(cuid())
   userId     String
   user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title      String? // "Дом", "Работа"
+  title      String? // "Дом", "Офис"
   city       String
   street     String
   apartment  String?
@@ -300,27 +388,27 @@ model Address {
 // ==================== FAVORITES ====================
 
 model Favorite {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   userId    String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@unique([userId, productId])
   @@map("favorites")
 }
 
-// ==================== BONUS SYSTEM ====================
+// ==================== BONUS & LOYALTY ====================
 
 model BonusLevel {
-  id              String   @id @default(cuid())
-  name            String   // "Level 1", "Level 2", etc.
-  minPurchaseAmount Float  // Minimum total purchases to reach this level
-  bonusPercent    Float    // % of order converted to bonuses
-  privileges      Json?    // Flexible privileges stored as JSON
-  color           String?  // UI color for the level badge
-  order           Int      @default(0)
+  id                String  @id @default(cuid())
+  name              String // "Level 1 — Starter", "Level 4 — Platinum VIP"
+  minPurchaseAmount Int // Minimum total spend in tiyn to reach this level
+  bonusPercent      Float // % of order credited as bonuses (e.g. 5.0)
+  privileges        Json?
+  color             String?
+  order             Int     @default(0)
 
   users User[]
 
@@ -328,15 +416,14 @@ model BonusLevel {
 }
 
 model BonusTransaction {
-  id          String              @id @default(cuid())
+  id          String               @id @default(cuid())
   userId      String
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        BonusTransactionType
-  amount      Int                 // Positive = earned, negative = spent
+  amount      Int // Positive = earned, negative = spent
   description String
   orderId     String?
-
-  createdAt   DateTime            @default(now())
+  createdAt   DateTime             @default(now())
 
   @@map("bonus_transactions")
 }
@@ -352,13 +439,13 @@ enum BonusTransactionType {
 // ==================== SABYR CLUB ====================
 
 model ClubMembership {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  startDate DateTime @default(now())
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate DateTime  @default(now())
   endDate   DateTime?
-  isActive  Boolean  @default(true)
-  plan      ClubPlan @default(MONTHLY)
+  isActive  Boolean   @default(true)
+  plan      ClubPlan  @default(MONTHLY)
 
   @@map("club_memberships")
 }
@@ -369,25 +456,25 @@ enum ClubPlan {
 }
 
 model ClubSettings {
-  id         String @id @default(cuid())
-  key        String @unique
-  value      String @db.Text
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
 
   @@map("club_settings")
 }
 
-// ==================== GIFT CARDS ====================
+// ==================== GIFT CARDS & PROMOS ====================
 
 model GiftCard {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  amount      Float    // Original amount
-  balance     Float    // Remaining balance
-  ownerId     String?
-  owner       User?    @relation("GiftCardOwner", fields: [ownerId], references: [id])
-  expiresAt   DateTime?
-  isActive    Boolean  @default(true)
+  id        String    @id @default(cuid())
+  code      String    @unique
+  amount    Int // Original amount in tiyn
+  balance   Int // Remaining balance in tiyn
+  ownerId   String?
+  owner     User?     @relation("GiftCardOwner", fields: [ownerId], references: [id])
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
 
   orders Order[]
 
@@ -396,25 +483,22 @@ model GiftCard {
   @@map("gift_cards")
 }
 
-// ==================== PROMO CODES ====================
-
 model PromoCode {
-  id              String        @id @default(cuid())
-  code            String        @unique
-  type            PromoCodeType
-  value           Float         // % or fixed amount
-  maxUses         Int?          // null = unlimited
-  usedCount       Int           @default(0)
-  minOrderAmount  Float?
-  expiresAt       DateTime?
-  isActive        Boolean       @default(true)
+  id             String        @id @default(cuid())
+  code           String        @unique
+  type           PromoCodeType
+  value          Int // If PERCENTAGE: percent value (e.g. 15). If FIXED: amount in tiyn
+  maxUses        Int?
+  usedCount      Int           @default(0)
+  minOrderAmount Int? // In tiyn
+  expiresAt      DateTime?
+  isActive       Boolean       @default(true)
 
-  // Restrictions
-  categoryIds     String[]      // Empty = all categories
-  productIds      String[]      // Empty = all products
-  userSpecific    Boolean       @default(false) // For influencer codes
+  categoryIds  String[]
+  productIds   String[]
+  userSpecific Boolean  @default(false)
 
-  usages Order[]
+  usages          Order[]
   promoCodeUsages PromoCodeUsage[]
 
   createdAt DateTime @default(now())
@@ -439,7 +523,34 @@ model PromoCodeUsage {
   @@map("promo_code_usages")
 }
 
-// ==================== NOTIFICATIONS ====================
+// ==================== AI TRY-ON SESSIONS ====================
+
+model TryOnSession {
+  id           String      @id @default(cuid())
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userPhotoUrl String
+  productId    String
+  product      Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId    String?
+  resultUrl    String?
+  status       TryOnStatus @default(PENDING)
+  errorMessage String?
+  consentGiven Boolean     @default(true)
+  expiresAt    DateTime // Biometric privacy cleanup after 24 hours
+  createdAt    DateTime    @default(now())
+
+  @@map("tryon_sessions")
+}
+
+enum TryOnStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ==================== NOTIFICATIONS & CMS ====================
 
 model Notification {
   id        String           @id @default(cuid())
@@ -449,8 +560,7 @@ model Notification {
   title     String
   body      String
   isRead    Boolean          @default(false)
-  data      Json?            // Extra data (orderId, productId, etc.)
-
+  data      Json?
   createdAt DateTime         @default(now())
 
   @@map("notifications")
@@ -465,17 +575,15 @@ enum NotificationType {
   CLUB_OFFER
 }
 
-// ==================== CONTENT (Admin) ====================
-
 model Banner {
-  id        String   @id @default(cuid())
-  title     String?
-  subtitle  String?
-  imageUrl  String
-  videoUrl  String?
-  link      String?
-  isActive  Boolean  @default(true)
-  order     Int      @default(0)
+  id       String   @id @default(cuid())
+  title    String?
+  subtitle String?
+  imageUrl String
+  videoUrl String?
+  link     String?
+  isActive Boolean  @default(true)
+  order    Int      @default(0)
 
   createdAt DateTime @default(now())
 
@@ -489,8 +597,8 @@ model Collection {
   imageUrl    String?
   isActive    Boolean  @default(true)
   order       Int      @default(0)
-  
-  createdAt   DateTime @default(now())
+
+  createdAt DateTime @default(now())
 
   @@map("collections")
 }
@@ -502,3 +610,4 @@ model SiteSettings {
 
   @@map("site_settings")
 }
+

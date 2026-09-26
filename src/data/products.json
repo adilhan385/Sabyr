@@ -1,0 +1,28 @@
+[
+  {
+    "id": "example-1",
+    "name": "Пример",
+    "slug": "example-item",
+    "category": "Пиджаки и жакеты",
+    "price": 50000,
+    "comparePrice": 65000,
+    "description": "Пример карточки одежды SABYR. Измените название, цену, скидку и фотографии этого примера или добавьте свои товары в Админ-панели (/admin).",
+    "composition": "Пример состава изделия (редактируется в Админ-панели).",
+    "care": "Пример рекомендаций по уходу.",
+    "images": [
+      "/example-product.svg"
+    ],
+    "variants": [
+      { "id": "ex1-blk-xs", "color": "Чёрный", "colorHex": "#0D0D0D", "size": "XS", "stock": 5 },
+      { "id": "ex1-blk-s", "color": "Чёрный", "colorHex": "#0D0D0D", "size": "S", "stock": 5 },
+      { "id": "ex1-blk-m", "color": "Чёрный", "colorHex": "#0D0D0D", "size": "M", "stock": 5 },
+      { "id": "ex1-blk-l", "color": "Чёрный", "colorHex": "#0D0D0D", "size": "L", "stock": 5 }
+    ],
+    "isNew": true,
+    "isBestSeller": true,
+    "isClubOnly": false,
+    "aiDescription": "Пример изделия SABYR.",
+    "occasionTags": ["повседневный образ", "деловая встреча"],
+    "styleTags": ["minimalism"]
+  }
+]

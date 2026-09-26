@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000" width="800" height="1000">
+  <rect width="800" height="1000" fill="#0F0F0F"/>
+  <rect x="40" y="40" width="720" height="920" rx="16" fill="none" stroke="#C9A84C" stroke-width="1.5" stroke-opacity="0.35" stroke-dasharray="8 8"/>
+  <circle cx="400" cy="410" r="64" fill="#1A1A1A" stroke="#C9A84C" stroke-width="1.5" stroke-opacity="0.5"/>
+  <text x="400" y="426" text-anchor="middle" fill="#C9A84C" font-family="Georgia, serif" font-size="42" font-weight="bold">S</text>
+  <text x="400" y="535" text-anchor="middle" fill="#FFFFFF" font-family="sans-serif" font-size="28" font-weight="600" letter-spacing="6">ПРИМЕР</text>
+  <text x="400" y="580" text-anchor="middle" fill="#A1A1AA" font-family="sans-serif" font-size="16" letter-spacing="2">Карточка товара SABYR</text>
+  <text x="400" y="620" text-anchor="middle" fill="#71717A" font-family="sans-serif" font-size="13">Добавьте или измените одежду в Админ-панели</text>
+</svg>

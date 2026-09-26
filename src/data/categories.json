@@ -1,0 +1,9 @@
+[
+  { "id": "cat-1", "name": "Пиджаки и жакеты", "slug": "blazers" },
+  { "id": "cat-2", "name": "Брюки и палаццо", "slug": "pants" },
+  { "id": "cat-3", "name": "Платья", "slug": "dresses" },
+  { "id": "cat-4", "name": "Пальто и тренчи", "slug": "outerwear" },
+  { "id": "cat-5", "name": "Рубашки и блузы", "slug": "shirts" },
+  { "id": "cat-6", "name": "Трикотаж", "slug": "knitwear" },
+  { "id": "cat-7", "name": "Аксессуары", "slug": "accessories" }
+]

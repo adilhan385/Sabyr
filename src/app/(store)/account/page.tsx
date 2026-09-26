@@ -318,7 +318,7 @@ export default function AccountPage() {
                         : "border-border bg-background text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    ✉️ На Email (Почту)
+                    На Email (Почту)
                   </button>
                   <button
                     type="button"
@@ -329,7 +329,7 @@ export default function AccountPage() {
                         : "border-border bg-background text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    📱 По SMS (На номер)
+                    По SMS (На номер)
                   </button>
                 </div>
               </div>

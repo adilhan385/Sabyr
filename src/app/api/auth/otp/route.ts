@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       parsed.data.sendVia
     );
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       phone: result.phone,
       email: result.email,
@@ -69,6 +69,16 @@ export async function POST(req: NextRequest) {
           ? `Код отправлен на ${result.email}`
           : `Код отправлен на номер ${result.phone}`,
     });
+
+    res.cookies.set("sabyr-otp-hash", result.codeHash, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 300,
+    });
+
+    return res;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Ошибка отправки кода";
     return NextResponse.json({ success: false, error: message }, { status: 500 });

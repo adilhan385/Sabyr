@@ -39,13 +39,16 @@ export async function isDatabaseAvailable(): Promise<boolean> {
   }
 
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$queryRaw`SELECT "isBlocked" FROM "users" LIMIT 1`;
     _isConnected = true;
-    console.info("[SABYR DB] Connected to Neon PostgreSQL.");
+    console.info("[SABYR DB] Connected to SABYR Neon PostgreSQL.");
     return true;
   } catch (err) {
     _isConnected = false;
-    console.warn("[SABYR DB] Running in mock/local mode: PostgreSQL unreachable.", err instanceof Error ? err.message : err);
+    console.warn(
+      "[SABYR DB] Running in fallback mode: PostgreSQL unreachable or wrong DATABASE_URL schema.",
+      err instanceof Error ? err.message : err
+    );
     return false;
   }
 }

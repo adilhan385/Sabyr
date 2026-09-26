@@ -51,7 +51,8 @@ export async function POST(req: NextRequest) {
     }
 
     const { phone, code, name, email } = parsed.data;
-    const result = await loginWithPhone(phone, code, name, email || undefined);
+    const cookieCodeHash = req.cookies.get("sabyr-otp-hash")?.value;
+    const result = await loginWithPhone(phone, code, name, email || undefined, cookieCodeHash);
 
     if (!result.success || !result.token || !result.user) {
       return NextResponse.json(
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
       success: true,
       user: result.user,
     });
+    res.cookies.delete("sabyr-otp-hash");
 
     return setSessionCookie(res, result.token);
   } catch (err: unknown) {

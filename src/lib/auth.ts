@@ -187,6 +187,8 @@ export async function requireAdmin(req: NextRequest): Promise<{ user: AuthUser }
  * Generates a 4-digit OTP code, saves its hash in `OtpVerification`,
  * and dispatches it via Mobizon SMS (if `SMS_API_KEY` is set) and/or Resend Email (if `RESEND_API_KEY` is set).
  */
+const memoryOtps = new Map<string, { codeHash: string; expiresAt: number }>();
+
 export async function requestOtpCode(
   rawPhone: string,
   rawEmail?: string,
@@ -195,6 +197,7 @@ export async function requestOtpCode(
   success: boolean;
   phone: string;
   email?: string;
+  codeHash: string;
   devCode?: string;
   sentVia?: string[];
 }> {
@@ -204,27 +207,32 @@ export async function requestOtpCode(
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
   const sentVia_result: string[] = [];
 
+  memoryOtps.set(phone, { codeHash, expiresAt: expiresAt.getTime() });
+
   let targetEmail = rawEmail?.trim() || undefined;
 
   const dbUp = await isDatabaseAvailable();
   if (dbUp) {
-    const existingUser = await prisma.user.findFirst({
-      where: { phone },
-      select: { email: true, isBlocked: true },
-    });
-    if (existingUser?.isBlocked) {
-      throw new Error("Ваш аккаунт заблокирован администратором SABYR");
-    }
-    if (!targetEmail && existingUser?.email) {
-      targetEmail = existingUser.email;
-    }
-
     try {
+      const existingUser = await prisma.user.findFirst({
+        where: { phone },
+        select: { email: true, isBlocked: true },
+      });
+      if (existingUser?.isBlocked) {
+        throw new Error("Ваш аккаунт заблокирован администратором SABYR");
+      }
+      if (!targetEmail && existingUser?.email) {
+        targetEmail = existingUser.email;
+      }
+
       await prisma.otpVerification.create({
         data: { phone, codeHash, expiresAt },
       });
     } catch (err) {
-      console.warn("[SABYR Auth] Failed to persist OTP in DB:", err);
+      if (err instanceof Error && err.message.includes("заблокирован")) {
+        throw err;
+      }
+      console.warn("[SABYR Auth] Failed to query/persist OTP in DB:", err);
     }
   }
 
@@ -286,6 +294,7 @@ export async function requestOtpCode(
     success: true,
     phone,
     email: targetEmail,
+    codeHash,
     sentVia: sentVia_result,
     devCode: isRealDeliveryActive ? undefined : randomCode,
   };
@@ -298,7 +307,8 @@ export async function loginWithPhone(
   rawPhone: string,
   code: string,
   name?: string,
-  email?: string
+  email?: string,
+  cookieCodeHash?: string
 ): Promise<{
   success: boolean;
   error?: string;
@@ -312,130 +322,148 @@ export async function loginWithPhone(
   const isSandboxBypass = !process.env.SMS_API_KEY && cleanCode === "1234";
   let otpValid = isSandboxBypass;
 
-  if (!otpValid && dbUp) {
-    const latestOtp = await prisma.otpVerification.findFirst({
-      where: {
-        phone,
-        isUsed: false,
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+  const expectedHash = hashOtp(phone, cleanCode);
+  if (!otpValid && cookieCodeHash && cookieCodeHash === expectedHash) {
+    otpValid = true;
+  }
 
-    if (latestOtp) {
-      const expectedHash = hashOtp(phone, cleanCode);
-      if (latestOtp.codeHash === expectedHash) {
-        otpValid = true;
-        await prisma.otpVerification.update({
-          where: { id: latestOtp.id },
-          data: { isUsed: true },
-        });
-      } else {
-        await prisma.otpVerification.update({
-          where: { id: latestOtp.id },
-          data: { attempts: { increment: 1 } },
-        });
+  const memEntry = memoryOtps.get(phone);
+  if (!otpValid && memEntry && memEntry.expiresAt > Date.now() && memEntry.codeHash === expectedHash) {
+    otpValid = true;
+    memoryOtps.delete(phone);
+  }
+
+  if (!otpValid && dbUp) {
+    try {
+      const latestOtp = await prisma.otpVerification.findFirst({
+        where: {
+          phone,
+          isUsed: false,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (latestOtp) {
+        if (latestOtp.codeHash === expectedHash) {
+          otpValid = true;
+          await prisma.otpVerification.update({
+            where: { id: latestOtp.id },
+            data: { isUsed: true },
+          });
+        } else {
+          await prisma.otpVerification.update({
+            where: { id: latestOtp.id },
+            data: { attempts: { increment: 1 } },
+          });
+        }
       }
+    } catch (err) {
+      console.warn("[SABYR Auth] OTP verification DB fallback:", err);
     }
   }
 
   if (!otpValid) {
     return {
       success: false,
-      error: "Неверный или просроченный код из SMS (для теста используйте 1234)",
+      error: "Неверный или просроченный код подтверждения",
     };
   }
 
   const isAdminPhone = phone === "+7 (777) 000-00-00";
 
   if (dbUp) {
-    let dbUser = await prisma.user.findUnique({
-      where: { phone },
-      include: { bonusLevel: true, clubMembership: true },
-    });
-
-    if (dbUser?.isBlocked) {
-      return {
-        success: false,
-        error: "Ваш аккаунт заблокирован администратором SABYR",
-      };
-    }
-
-    const normalizedEmail = email?.trim() || undefined;
-    let safeEmailToSet = normalizedEmail;
-    if (normalizedEmail) {
-      const emailOwner = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        select: { id: true },
+    try {
+      let dbUser = await prisma.user.findUnique({
+        where: { phone },
+        include: { bonusLevel: true, clubMembership: true },
       });
-      if (emailOwner && emailOwner.id !== dbUser?.id) {
-        safeEmailToSet = undefined;
-      }
-    }
 
-    if (!dbUser) {
-      dbUser = await prisma.user.create({
-        data: {
-          phone,
-          name: name?.trim() || (isAdminPhone ? "Администратор SABYR" : "Клиент SABYR"),
-          email: safeEmailToSet,
-          role: isAdminPhone ? "ADMIN" : "CUSTOMER",
-          bonusBalance: 3000, // Welcome bonus 3000 KZT
-          bonusLevelId: "bl-1",
-          bonusHistory: {
-            create: {
-              type: "EARNED",
-              amount: 3000,
-              description: "Приветственные бонусы за регистрацию в SABYR",
+      if (dbUser?.isBlocked) {
+        return {
+          success: false,
+          error: "Ваш аккаунт заблокирован администратором SABYR",
+        };
+      }
+
+      const normalizedEmail = email?.trim() || undefined;
+      let safeEmailToSet = normalizedEmail;
+      if (normalizedEmail) {
+        const emailOwner = await prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true },
+        });
+        if (emailOwner && emailOwner.id !== dbUser?.id) {
+          safeEmailToSet = undefined;
+        }
+      }
+
+      if (!dbUser) {
+        dbUser = await prisma.user.create({
+          data: {
+            phone,
+            name: name?.trim() || (isAdminPhone ? "Администратор SABYR" : "Клиент SABYR"),
+            email: safeEmailToSet,
+            role: isAdminPhone ? "ADMIN" : "CUSTOMER",
+            bonusBalance: 3000, // Welcome bonus 3000 KZT
+            bonusLevelId: "bl-1",
+            bonusHistory: {
+              create: {
+                type: "EARNED",
+                amount: 3000,
+                description: "Приветственные бонусы за регистрацию в SABYR",
+              },
             },
           },
-        },
-        include: { bonusLevel: true, clubMembership: true },
+          include: { bonusLevel: true, clubMembership: true },
+        });
+      } else if (name?.trim() || safeEmailToSet || (isAdminPhone && dbUser.role !== "ADMIN")) {
+        dbUser = await prisma.user.update({
+          where: { id: dbUser.id },
+          data: {
+            ...(name?.trim() ? { name: name.trim() } : {}),
+            ...(safeEmailToSet ? { email: safeEmailToSet } : {}),
+            ...(isAdminPhone ? { role: "ADMIN" } : {}),
+          },
+          include: { bonusLevel: true, clubMembership: true },
+        });
+      }
+
+      const authUser: AuthUser = {
+        id: dbUser.id,
+        name: dbUser.name || "Клиент SABYR",
+        phone: dbUser.phone || phone,
+        email: dbUser.email || undefined,
+        role: dbUser.role,
+        bonusBalance: dbUser.bonusBalance,
+        bonusLevel: dbUser.bonusLevel?.name || "Новый клиент",
+        isClubMember: Boolean(dbUser.clubMembership?.isActive),
+      };
+
+      const token = await signSessionToken({
+        sub: authUser.id,
+        role: authUser.role,
+        phone: authUser.phone,
+        email: authUser.email,
+        name: authUser.name,
       });
-    } else if (name?.trim() || safeEmailToSet || (isAdminPhone && dbUser.role !== "ADMIN")) {
-      dbUser = await prisma.user.update({
-        where: { id: dbUser.id },
-        data: {
-          ...(name?.trim() ? { name: name.trim() } : {}),
-          ...(safeEmailToSet ? { email: safeEmailToSet } : {}),
-          ...(isAdminPhone ? { role: "ADMIN" } : {}),
-        },
-        include: { bonusLevel: true, clubMembership: true },
-      });
+
+      return { success: true, token, user: authUser };
+    } catch (err) {
+      console.warn("[SABYR Auth] User DB query failed, using JWT fallback:", err);
     }
-
-    const authUser: AuthUser = {
-      id: dbUser.id,
-      name: dbUser.name || "Клиент SABYR",
-      phone: dbUser.phone || phone,
-      email: dbUser.email || undefined,
-      role: dbUser.role,
-      bonusBalance: dbUser.bonusBalance,
-      bonusLevel: dbUser.bonusLevel?.name || "Новый клиент",
-      isClubMember: Boolean(dbUser.clubMembership?.isActive),
-    };
-
-    const token = await signSessionToken({
-      sub: authUser.id,
-      role: authUser.role,
-      phone: authUser.phone,
-      email: authUser.email,
-      name: authUser.name,
-    });
-
-    return { success: true, token, user: authUser };
   }
 
-  // Fallback when DB is offline
+  // Fallback when DB is offline or wrong DATABASE_URL is configured
   const fallbackUser: AuthUser = {
-    id: isAdminPhone ? "usr-admin-01" : "usr-01",
-    name: name?.trim() || (isAdminPhone ? "Администратор SABYR" : "Айгерим Касымова"),
+    id: isAdminPhone ? "usr-admin-01" : `usr-${phone.replace(/\D/g, "")}`,
+    name: name?.trim() || (isAdminPhone ? "Администратор SABYR" : "Клиент SABYR"),
     phone,
-    email: email?.trim() || (isAdminPhone ? "admin@sabyr.kz" : "aigerim.k@gmail.com"),
+    email: email?.trim() || (isAdminPhone ? "admin@sabyr.kz" : undefined),
     role: isAdminPhone ? "ADMIN" : "CUSTOMER",
-    bonusBalance: 14500,
-    bonusLevel: "Silver",
-    isClubMember: true,
+    bonusBalance: 3000,
+    bonusLevel: "Новый клиент",
+    isClubMember: isAdminPhone,
   };
 
   const token = await signSessionToken({

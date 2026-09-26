@@ -361,12 +361,24 @@ export async function loginWithPhone(
       };
     }
 
+    const normalizedEmail = email?.trim() || undefined;
+    let safeEmailToSet = normalizedEmail;
+    if (normalizedEmail) {
+      const emailOwner = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      });
+      if (emailOwner && emailOwner.id !== dbUser?.id) {
+        safeEmailToSet = undefined;
+      }
+    }
+
     if (!dbUser) {
       dbUser = await prisma.user.create({
         data: {
           phone,
           name: name?.trim() || (isAdminPhone ? "Администратор SABYR" : "Клиент SABYR"),
-          email: email?.trim() || undefined,
+          email: safeEmailToSet,
           role: isAdminPhone ? "ADMIN" : "CUSTOMER",
           bonusBalance: 3000, // Welcome bonus 3000 KZT
           bonusLevelId: "bl-1",
@@ -380,12 +392,13 @@ export async function loginWithPhone(
         },
         include: { bonusLevel: true, clubMembership: true },
       });
-    } else if (name?.trim() || email?.trim()) {
+    } else if (name?.trim() || safeEmailToSet || (isAdminPhone && dbUser.role !== "ADMIN")) {
       dbUser = await prisma.user.update({
         where: { id: dbUser.id },
         data: {
           ...(name?.trim() ? { name: name.trim() } : {}),
-          ...(email?.trim() ? { email: email.trim() } : {}),
+          ...(safeEmailToSet ? { email: safeEmailToSet } : {}),
+          ...(isAdminPhone ? { role: "ADMIN" } : {}),
         },
         include: { bonusLevel: true, clubMembership: true },
       });

@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, Suspense } from "react
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCartStore } from "@/store/cart";
-import { ProductItem, products as fallbackProducts } from "@/data/mockData";
+import { PRODUCTS, ProductItem } from "@/data/mockData";
 import { useSabySession } from "@/hooks/useSabySession";
 import { formatPrice } from "@/lib/utils";
 
@@ -977,22 +977,22 @@ function AITryOnContent() {
   const initialProductId = searchParams.get("productId") || "";
   const initialSecondProductId = searchParams.get("secondProductId") || "";
 
-  const { user, loading: sessionLoading } = useSabySession();
+  const { user, isLoading: sessionLoading } = useSabySession();
   const [aiClubOnly, setAiClubOnly] = useState(true);
-  const [clubPrice, setClubPrice] = useState(25000);
+  const [clubPrice, setClubPrice] = useState(99000);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  const [catalogProducts, setCatalogProducts] = useState<ProductItem[]>(fallbackProducts);
+  const [catalogProducts, setCatalogProducts] = useState<ProductItem[]>(PRODUCTS);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem>(
     () =>
-      (initialProductId && fallbackProducts.find((p) => p.id === initialProductId)) ||
-      fallbackProducts[0]
+      (initialProductId && PRODUCTS.find((p) => p.id === initialProductId)) ||
+      PRODUCTS[0]
   );
   const [secondProduct, setSecondProduct] = useState<ProductItem | null>(
     () =>
-      (initialSecondProductId && fallbackProducts.find((p) => p.id === initialSecondProductId)) ||
-      fallbackProducts.find((p) => p.id === "sabyr-5") ||
-      fallbackProducts[1] ||
+      (initialSecondProductId && PRODUCTS.find((p) => p.id === initialSecondProductId)) ||
+      PRODUCTS.find((p) => p.id === "sabyr-5") ||
+      PRODUCTS[1] ||
       null
   );
   const [selectedSize, setSelectedSize] = useState("M");
@@ -1040,17 +1040,18 @@ function AITryOnContent() {
     Promise.all([
       fetch("/api/admin/settings")
         .then((r) => r.json())
-        .catch(() => ({ settings: {} })),
+        .catch(() => null),
       fetch("/api/products")
         .then((r) => r.json())
         .catch(() => ({ products: [] })),
     ]).then(([settingsData, prodData]) => {
-      if (settingsData?.settings) {
-        if (settingsData.settings.ai_club_only === "false") {
+      if (settingsData?.club) {
+        if (settingsData.club.ai_club_only === "false") {
           setAiClubOnly(false);
         }
-        if (settingsData.settings.club_membership_price) {
-          setClubPrice(Number(settingsData.settings.club_membership_price));
+        if (settingsData.club.annual_price) {
+          const parsedPrice = Number(String(settingsData.club.annual_price).replace(/\D/g, ""));
+          if (parsedPrice > 0) setClubPrice(parsedPrice);
         }
       }
       setSettingsLoaded(true);
@@ -1081,8 +1082,9 @@ function AITryOnContent() {
     });
   }, [initialProductId, initialSecondProductId]);
 
-  const hasClubAccess =
-    !aiClubOnly || Boolean(user && (user.isClubMember || user.role === "ADMIN"));
+  const hasClubAccess = Boolean(
+    !aiClubOnly || user?.clubMembership?.isActive || user?.role === "ADMIN"
+  );
 
   // Adjust vertical default position when switching between tops/suits and trousers
   const applyAnchorToGarment = useCallback((anchor: BodyAnchor, prod: ProductItem | null) => {
@@ -1476,25 +1478,33 @@ function AITryOnContent() {
 
   const handleAddToCart = () => {
     if (!selectedProduct) return;
+    const primaryVariant =
+      selectedProduct.variants.find((v) => v.size === selectedSize) || selectedProduct.variants[0];
     addItem({
       id: `${selectedProduct.id}-${selectedSize}`,
       productId: selectedProduct.id,
+      variantId: primaryVariant?.id || `${selectedProduct.id}-${selectedSize}`,
       name: selectedProduct.name,
       price: selectedProduct.price,
       size: selectedSize,
-      color: selectedProduct.variants[0]?.color || "Стандарт",
+      color: primaryVariant?.color || "Стандарт",
       image: selectedProduct.images[0],
+      slug: selectedProduct.slug,
       quantity: 1,
     });
     if (tryOnMode === "outfit" && secondProduct && secondProduct.id !== selectedProduct.id) {
+      const secondaryVariant =
+        secondProduct.variants.find((v) => v.size === selectedSize) || secondProduct.variants[0];
       addItem({
         id: `${secondProduct.id}-${selectedSize}`,
         productId: secondProduct.id,
+        variantId: secondaryVariant?.id || `${secondProduct.id}-${selectedSize}`,
         name: secondProduct.name,
         price: secondProduct.price,
         size: selectedSize,
-        color: secondProduct.variants[0]?.color || "Стандарт",
+        color: secondaryVariant?.color || "Стандарт",
         image: secondProduct.images[0],
+        slug: secondProduct.slug,
         quantity: 1,
       });
     }

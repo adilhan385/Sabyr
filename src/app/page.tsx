@@ -26,11 +26,11 @@ const INITIAL_FEATURED = [
 ];
 
 const CATEGORIES = [
-  { name: "Верхняя одежда", slug: "outerwear", image: "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=800&q=85" },
-  { name: "Пиджаки", slug: "blazers", image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=85" },
-  { name: "Брюки", slug: "pants", image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=85" },
-  { name: "Платья", slug: "dresses", image: "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=800&q=85" },
-  { name: "Рубашки", slug: "shirts", image: "https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&q=85" },
+  { name: "Худи и свитшоты", slug: "hoodies-sweatshirts", image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800&q=85" },
+  { name: "Футболки и лонгсливы", slug: "tshirts-longsleeves", image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&q=85" },
+  { name: "Костюмы и комплекты", slug: "sets-suits", image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=85" },
+  { name: "Брюки и джоггеры", slug: "pants-joggers", image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=85" },
+  { name: "Верхняя одежда и куртки", slug: "outerwear-jackets", image: "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=800&q=85" },
 ];
 
 const fadeInUp = {
@@ -104,8 +104,8 @@ export default function HomePage() {
               <div className="inline-flex items-center gap-3 pr-4 pl-1.5 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md mb-7">
                 <SabyrAvatar className="w-8 h-8 rounded-full border border-white/20 shadow-md flex-shrink-0" />
                 <span className="w-1.5 h-1.5 rounded-full bg-[#C9A84C] flex-shrink-0" />
-                <p className="text-white/90 text-[11px] md:text-xs tracking-[0.25em] uppercase font-medium">
-                  Atelier Collection 2026
+                <p className="text-white/90 text-[11px] md:text-xs tracking-[0.22em] uppercase font-medium">
+                  Астана • Доставка по Казахстану
                 </p>
               </div>
 
@@ -114,11 +114,11 @@ export default function HomePage() {
               </div>
 
               <h1 className="font-brand text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold uppercase tracking-[0.06em] leading-[1.2] drop-shadow-sm mb-6">
-                Архитектура силуэта.
+                Первое впечатление без слов.
               </h1>
 
               <p className="text-white/85 text-base md:text-lg max-w-lg mb-10 leading-relaxed font-light drop-shadow-xs">
-                Безупречный крой, премиальные натуральные ткани и интеллектуальный минимализм казахстанского модного дома.
+                Современная повседневная одежда. Лаконичный крой, плотные премиальные ткани и комфорт на каждый день.
               </p>
 
               <div className="flex flex-wrap items-center gap-4">
@@ -364,18 +364,18 @@ export default function HomePage() {
               {[
                 {
                   icon: Truck,
-                  title: "Персональная доставка",
-                  desc: "Бесплатная курьерская доставка по Алматы и Казахстану с возможностью предварительной примерки.",
+                  title: "Астана • Доставка по Казахстану",
+                  desc: "Быстрая курьерская доставка по г. Астана в день заказа и отправка во все регионы Казахстана.",
                 },
                 {
                   icon: RotateCcw,
-                  title: "14 дней на примерку",
-                  desc: "Комфортный возврат или обмен в бутике либо через курьерскую службу дома.",
+                  title: "14 дней на обмен и возврат",
+                  desc: "Простой обмен размера или возврат при сохранении товарного вида и фабричных бирок.",
                 },
                 {
                   icon: ShieldCheck,
-                  title: "Стандарты Atelier SABYR",
-                  desc: "Европейские ткани высшей категории, премиальная фурнитура и контроль ручной сборки каждого шва.",
+                  title: "Современная повседневная одежда",
+                  desc: "Плотные ткани, продуманная посадка и внимание к каждой детали — первое впечатление без слов.",
                 },
               ].map((item, idx) => {
                 const Icon = item.icon;

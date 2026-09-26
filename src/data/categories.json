@@ -1,9 +1,9 @@
 [
-  { "id": "cat-1", "name": "Пиджаки и жакеты", "slug": "blazers" },
-  { "id": "cat-2", "name": "Брюки и палаццо", "slug": "pants" },
-  { "id": "cat-3", "name": "Платья", "slug": "dresses" },
-  { "id": "cat-4", "name": "Пальто и тренчи", "slug": "outerwear" },
-  { "id": "cat-5", "name": "Рубашки и блузы", "slug": "shirts" },
-  { "id": "cat-6", "name": "Трикотаж", "slug": "knitwear" },
+  { "id": "cat-1", "name": "Худи и свитшоты", "slug": "hoodies-sweatshirts" },
+  { "id": "cat-2", "name": "Футболки и лонгсливы", "slug": "tshirts-longsleeves" },
+  { "id": "cat-3", "name": "Костюмы и комплекты", "slug": "sets-suits" },
+  { "id": "cat-4", "name": "Брюки и джоггеры", "slug": "pants-joggers" },
+  { "id": "cat-5", "name": "Рубашки и поло", "slug": "shirts-polo" },
+  { "id": "cat-6", "name": "Верхняя одежда и куртки", "slug": "outerwear-jackets" },
   { "id": "cat-7", "name": "Аксессуары", "slug": "accessories" }
 ]

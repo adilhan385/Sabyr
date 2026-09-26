@@ -53,7 +53,7 @@ export default function AdminPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [newProductName, setNewProductName] = useState("");
-  const [newProductCategory, setNewProductCategory] = useState("Пиджаки и жакеты");
+  const [newProductCategory, setNewProductCategory] = useState("Худи и свитшоты");
   const [newProductPrice, setNewProductPrice] = useState(50000);
   const [newProductComparePrice, setNewProductComparePrice] = useState<string>("");
   const [newProductImageUrl, setNewProductImageUrl] = useState("");
@@ -273,7 +273,7 @@ export default function AdminPage() {
   const openAddProductModal = () => {
     setEditingProductId(null);
     setNewProductName("");
-    setNewProductCategory("Пиджаки и жакеты");
+    setNewProductCategory(categoriesList[0]?.name || "Худи и свитшоты");
     setNewProductPrice(50000);
     setNewProductComparePrice("");
     setNewProductImageUrl("/example-product.svg");
@@ -1037,12 +1037,12 @@ export default function AdminPage() {
                               ))
                             ) : (
                               <>
-                                <option>Пиджаки и жакеты</option>
-                                <option>Брюки и палаццо</option>
-                                <option>Рубашки и блузы</option>
-                                <option>Пальто и тренчи</option>
-                                <option>Платья</option>
-                                <option>Трикотаж</option>
+                                <option>Худи и свитшоты</option>
+                                <option>Футболки и лонгсливы</option>
+                                <option>Костюмы и комплекты</option>
+                                <option>Брюки и джоггеры</option>
+                                <option>Рубашки и поло</option>
+                                <option>Верхняя одежда и куртки</option>
                                 <option>Аксессуары</option>
                               </>
                             )}

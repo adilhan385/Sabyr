@@ -28,12 +28,12 @@ export interface ProductItem {
 
 export const CATEGORIES = [
   { id: "all", name: "Все изделия", slug: "" },
-  { id: "blazers", name: "Пиджаки и жакеты", slug: "blazers" },
-  { id: "pants", name: "Брюки и палаццо", slug: "pants" },
-  { id: "dresses", name: "Платья", slug: "dresses" },
-  { id: "outerwear", name: "Пальто и тренчи", slug: "outerwear" },
-  { id: "shirts", name: "Рубашки и блузы", slug: "shirts" },
-  { id: "knitwear", name: "Трикотаж", slug: "knitwear" },
+  { id: "hoodies-sweatshirts", name: "Худи и свитшоты", slug: "hoodies-sweatshirts" },
+  { id: "tshirts-longsleeves", name: "Футболки и лонгсливы", slug: "tshirts-longsleeves" },
+  { id: "sets-suits", name: "Костюмы и комплекты", slug: "sets-suits" },
+  { id: "pants-joggers", name: "Брюки и джоггеры", slug: "pants-joggers" },
+  { id: "shirts-polo", name: "Рубашки и поло", slug: "shirts-polo" },
+  { id: "outerwear-jackets", name: "Верхняя одежда и куртки", slug: "outerwear-jackets" },
   { id: "accessories", name: "Аксессуары", slug: "accessories" },
 ];
 
@@ -42,7 +42,7 @@ export const PRODUCTS: ProductItem[] = [
     id: "example-1",
     name: "Пример",
     slug: "example-item",
-    category: "Пиджаки и жакеты",
+    category: "Худи и свитшоты",
     price: 50000,
     comparePrice: 65000,
     description: "Пример карточки одежды SABYR. Измените название, цену, скидку и фотографии этого примера или добавьте свои товары в Админ-панели (/admin).",

@@ -16,13 +16,13 @@ export default function AboutPage() {
           </Link>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[#C9A84C] text-xs font-semibold uppercase tracking-wider mb-4 mx-auto block w-fit">
             <Sparkles className="w-3.5 h-3.5" />
-            Философия дома моды <span className="font-brand tracking-[0.15em]">SABYR</span>
+            О бренде <span className="font-brand tracking-[0.15em]">SABYR</span>
           </div>
           <h1 className="font-serif text-3xl md:text-6xl font-light tracking-wide mb-4 text-white">
-            Казахстанский премиум с мировым взглядом
+            Первое впечатление без слов.
           </h1>
           <p className="text-white/75 text-sm md:text-base max-w-2xl mx-auto leading-relaxed font-light">
-            SABYR — это союз многовековой кочевой эстетики, монументального минимализма и кутюрных технологий пошива.
+            SABYR (@sabyr.wear) — бренд современной повседневной одежды из Астаны для тех, кто выбирает уверенный минимализм, комфорт и качество в каждой детали.
           </p>
         </div>
       </section>
@@ -32,48 +32,58 @@ export default function AboutPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <div className="space-y-4">
             <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
-              Идея и миссия
+              Философия SABYR
             </span>
             <h2 className="text-2xl md:text-3xl font-serif">
-              Одежда как форма архитектурного самовыражения
+              Современная повседневная одежда с характером
             </h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Мы основали SABYR, чтобы доказать: современный казахстанский fashion-бренд способен создавать вещи вне времени. Каждая линия, каждый лацкан и шов выверены до миллиметра.
+              Название SABYR отражает внутреннее спокойствие, выдержку и уверенность, которая не нуждается в громких словах. Мы создаем базовые и акцентные вещи на каждый день: худи, свитшоты, футболки, костюмы, брюки и верхнюю одежду.
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Мы отбираем исключительно натуральные ткани из Италии и Японии: кашемир высокой плотности, шелковистый мерсеризованный хлопок и шерсть с благородным блеском.
+              Каждая модель разрабатывается с акцентом на правильную посадку, плотные износостойкие ткани и чистые линии, которые легко сочетаются между собой в повседневном гардеробе.
             </p>
           </div>
 
           <div className="bg-secondary/40 border border-border rounded-3xl p-8 space-y-6">
             <div className="border-b border-border pb-4">
-              <span className="text-3xl font-serif text-[hsl(var(--accent))]">100%</span>
-              <p className="text-xs text-muted-foreground mt-1">Собственное производство в Казахстане</p>
+              <span className="text-2xl font-serif text-[hsl(var(--accent))]">Астана • Казахстан</span>
+              <p className="text-xs text-muted-foreground mt-1">Локальный бренд с быстрой доставкой по всей стране</p>
             </div>
             <div className="border-b border-border pb-4">
-              <span className="text-3xl font-serif text-[hsl(var(--accent))]">0%</span>
-              <p className="text-xs text-muted-foreground mt-1">Синтетических компромиссов в основных линейках</p>
+              <span className="text-2xl font-serif text-[hsl(var(--accent))]">Плотные ткани</span>
+              <p className="text-xs text-muted-foreground mt-1">Материалы, которые держат форму после множества стирок</p>
             </div>
             <div>
-              <span className="text-3xl font-serif text-[hsl(var(--accent))]">12+</span>
-              <p className="text-xs text-muted-foreground mt-1">Проверок качества каждого сшитого изделия</p>
+              <span className="text-2xl font-serif text-[hsl(var(--accent))]">Выверенный крой</span>
+              <p className="text-xs text-muted-foreground mt-1">Актуальные силуэты для повседневного комфорта</p>
             </div>
           </div>
         </div>
 
         {/* Call to Action */}
         <div className="bg-card border border-border rounded-3xl p-8 text-center space-y-4">
-          <h3 className="text-xl font-bold">Познакомьтесь с актуальной коллекцией</h3>
+          <h3 className="text-xl font-bold">Познакомьтесь с коллекцией SABYR</h3>
           <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            Оцените качество материалов и безупречность силуэтов в нашем онлайн-каталоге или флагманских бутиках.
+            Выберите свои базовые изделия в каталоге на сайте или следите за новыми дропами в нашем Instagram @sabyr.wear.
           </p>
-          <Link
-            href="/catalog"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-foreground text-background text-xs font-semibold rounded-full hover:opacity-90 transition-opacity"
-          >
-            Смотреть каталог
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link
+              href="/catalog"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-foreground text-background text-xs font-semibold rounded-full hover:opacity-90 transition-opacity"
+            >
+              Смотреть каталог
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <a
+              href="https://www.instagram.com/sabyr.wear/?utm_source=ig_web_button_share_sheet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-6 py-3 border border-border bg-background text-foreground text-xs font-semibold rounded-full hover:bg-secondary transition-colors"
+            >
+              Instagram @sabyr.wear
+            </a>
+          </div>
         </div>
       </div>
     </main>

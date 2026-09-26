@@ -54,12 +54,13 @@ const DRAWER_MAIN_LINKS = [
 ];
 
 const DRAWER_CATEGORIES = [
-  "Пиджаки и жакеты",
-  "Пальто и тренчи",
-  "Брюки и палаццо",
-  "Платья",
-  "Рубашки и блузы",
-  "Трикотаж",
+  "Худи и свитшоты",
+  "Футболки и лонгсливы",
+  "Костюмы и комплекты",
+  "Брюки и джоггеры",
+  "Рубашки и поло",
+  "Верхняя одежда и куртки",
+  "Аксессуары",
 ];
 
 const DRAWER_SERVICE_LINKS = [
@@ -67,13 +68,14 @@ const DRAWER_SERVICE_LINKS = [
   { href: "/delivery", label: "Доставка и оплата", icon: Truck },
   { href: "/returns", label: "Возврат и обмен", icon: RotateCcw },
   { href: "/about", label: "О бренде SABYR", icon: Info },
-  { href: "/contacts", label: "Бутики и контакты", icon: Phone },
+  { href: "/contacts", label: "Контакты и заказ", icon: Phone },
 ];
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [drawerCategories, setDrawerCategories] = useState<string[]>(DRAWER_CATEGORIES);
   const mounted = useSyncExternalStore(
     emptySubscribe,
     () => true,
@@ -89,6 +91,14 @@ export function Header() {
       setIsScrolled(window.scrollY > 20);
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
+    fetch("/api/categories")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.categories) && data.categories.length > 0) {
+          setDrawerCategories(data.categories.map((c: { name: string }) => c.name).filter(Boolean));
+        }
+      })
+      .catch(() => {});
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
@@ -397,7 +407,7 @@ export function Header() {
                   Категории коллекции
                 </p>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {DRAWER_CATEGORIES.map((cat) => (
+                  {drawerCategories.map((cat) => (
                     <Link
                       key={cat}
                       href={`/catalog?category=${encodeURIComponent(cat)}`}

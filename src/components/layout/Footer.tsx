@@ -10,14 +10,14 @@ const FOOTER_LINKS = {
   ],
   Клиентам: [
     { href: "/delivery", label: "Доставка и оплата" },
-    { href: "/returns", label: "Возврат" },
+    { href: "/returns", label: "Возврат и обмен" },
     { href: "/size-guide", label: "Таблица размеров" },
-    { href: "/care", label: "Уход за изделием" },
+    { href: "/care", label: "Уход за одеждой" },
   ],
   "О бренде": [
     { href: "/about", label: "О SABYR" },
     { href: "/club", label: "SABYR CLUB" },
-    { href: "/contacts", label: "Контакты" },
+    { href: "/contacts", label: "Контакты и заказ" },
     { href: "/careers", label: "Работа у нас" },
   ],
 };
@@ -34,8 +34,11 @@ export function Footer() {
               <SabyrAvatar className="w-10 h-10 rounded-full border border-background/20 flex-shrink-0" />
               <SabyrLogo className="h-4 md:h-5 w-auto" />
             </Link>
-            <p className="mt-3 text-background/60 text-sm max-w-xs leading-relaxed">
-              Современный казахстанский fashion-бренд. Создаём одежду для тех, кто ценит качество и стиль.
+            <p className="mt-3 text-background/80 text-sm max-w-xs leading-relaxed font-medium">
+              Первое впечатление без слов.
+            </p>
+            <p className="mt-1 text-background/60 text-xs max-w-xs leading-relaxed">
+              Современная повседневная одежда • г. Астана • Доставка по всему Казахстану.
             </p>
             {/* Social */}
             <div className="flex gap-3 mt-6">
@@ -81,7 +84,7 @@ export function Footer() {
 
         {/* Bottom */}
         <div className="border-t border-background/10 mt-10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-background/40">
-          <p>© 2024 SABYR. Все права защищены.</p>
+          <p>© 2026 SABYR (@sabyr.wear). Все права защищены.</p>
           <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
             <Link href="/privacy" className="hover:text-background/60 transition-colors">
               Политика конфиденциальности

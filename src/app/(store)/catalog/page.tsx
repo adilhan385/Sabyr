@@ -24,6 +24,15 @@ function CatalogContent() {
   const filterParam = searchParams.get("filter");
 
   const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
+  const [apiCategories, setApiCategories] = useState<string[]>([
+    "Худи и свитшоты",
+    "Футболки и лонгсливы",
+    "Костюмы и комплекты",
+    "Брюки и джоггеры",
+    "Рубашки и поло",
+    "Верхняя одежда и куртки",
+    "Аксессуары",
+  ]);
   const [userCategory, setUserCategory] = useState<string | null>(null);
   const activeCategory = userCategory ?? (urlCategory || "Все");
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
@@ -43,11 +52,25 @@ function CatalogContent() {
         }
       })
       .catch(() => {});
+
+    fetch("/api/categories")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.categories) && data.categories.length > 0) {
+          setApiCategories(data.categories.map((c: { name: string }) => c.name).filter(Boolean));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const categories = [
     "Все",
-    ...Array.from(new Set(products.map((p) => p.category).filter(Boolean))),
+    ...Array.from(
+      new Set([
+        ...apiCategories,
+        ...products.map((p) => p.category).filter(Boolean),
+      ])
+    ),
   ];
 
   const availableColors = Array.from(
@@ -107,7 +130,7 @@ function CatalogContent() {
           <div className="inline-flex items-center gap-2 mb-3">
             <span className="w-1.5 h-1.5 rounded-full bg-[#C9A84C]" />
             <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground font-medium">
-              SABYR ATELIER
+              SABYR • ПЕРВОЕ ВПЕЧАТЛЕНИЕ БЕЗ СЛОВ
             </p>
           </div>
           <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light tracking-[-0.02em] leading-tight mb-3">
@@ -120,7 +143,7 @@ function CatalogContent() {
               : "Каталог коллекции"}
           </h1>
           <p className="text-xs md:text-sm text-muted-foreground font-light leading-relaxed">
-            Архитектурный крой, итальянская шерсть и премиальный шёлк. {filtered.length} изделий доступно к заказу.
+            Современная повседневная одежда • г. Астана • Доставка по всему Казахстану ({filtered.length} изделий).
           </p>
         </div>
       </div>

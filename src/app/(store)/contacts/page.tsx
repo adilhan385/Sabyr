@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Phone, Mail, Clock, ArrowLeft } from "lucide-react";
+import { MapPin, Mail, Clock, ArrowLeft, Truck } from "lucide-react";
 
 export default function ContactsPage() {
   return (
@@ -16,73 +16,65 @@ export default function ContactsPage() {
           </Link>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[#C9A84C] text-xs font-semibold uppercase tracking-wider mb-4 mx-auto block w-fit">
             <MapPin className="w-3.5 h-3.5" />
-            Бутики и консьерж-сервис <span className="font-brand tracking-[0.15em]">SABYR</span>
+            Заказ и вопросы <span className="font-brand tracking-[0.15em]">SABYR</span>
           </div>
           <h1 className="font-serif text-3xl md:text-5xl font-light tracking-wide mb-3 text-white">
-            Контакты
+            Контакты и связь
           </h1>
           <p className="text-white/75 text-sm md:text-base max-w-xl mx-auto leading-relaxed font-light">
-            Мы всегда на связи для индивидуальной консультации стилиста и записи на примерку.
+            Современная повседневная одежда • г. Астана • Доставка по всему Казахстану.
           </p>
         </div>
       </section>
 
       <div className="container max-w-4xl pt-10 space-y-10">
-        {/* Boutiques Grid */}
+        {/* Location & Delivery Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-card border border-border rounded-3xl p-6 md:p-8 space-y-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--accent))]">
-              Флагманский бутик
+              Локация бренда
             </span>
-            <h2 className="text-lg font-bold">Алматы, Самал-2</h2>
-            <div className="space-y-2 text-xs text-muted-foreground leading-relaxed">
+            <h2 className="text-lg font-bold">г. Астана, Казахстан</h2>
+            <div className="space-y-2.5 text-xs text-muted-foreground leading-relaxed">
               <p className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-foreground shrink-0" />
-                пр. Достык 180, ТЦ Dostyk Plaza, 2 этаж
+                Базируемся в г. Астана — курьерская отправка в день заказа
               </p>
               <p className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-foreground shrink-0" />
-                Ежедневно: 10:00 — 22:00
-              </p>
-              <p className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-foreground shrink-0" />
-                +7 (777) 100-20-30
+                Прием заказов на сайте и в Direct: ежедневно 10:00 — 22:00
               </p>
             </div>
           </div>
 
           <div className="bg-card border border-border rounded-3xl p-6 md:p-8 space-y-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--accent))]">
-              Бутик & Шоурум
+              География отправки
             </span>
-            <h2 className="text-lg font-bold">Астана, Есиль</h2>
-            <div className="space-y-2 text-xs text-muted-foreground leading-relaxed">
+            <h2 className="text-lg font-bold">Доставка по всему Казахстану</h2>
+            <div className="space-y-2.5 text-xs text-muted-foreground leading-relaxed">
               <p className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-foreground shrink-0" />
-                ул. Достык 16, Talan Gallery, 1 этаж
+                <Truck className="w-4 h-4 text-foreground shrink-0" />
+                Алматы, Шымкент, Караганда, Актобе, Атырау и все города РК
               </p>
               <p className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-foreground shrink-0" />
-                Ежедневно: 10:00 — 22:00
-              </p>
-              <p className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-foreground shrink-0" />
-                +7 (777) 200-30-40
+                Отправка через СДЭК и Казпочту с трек-номером отслеживания
               </p>
             </div>
           </div>
         </div>
 
-        {/* Concierge & Support */}
+        {/* Direct & Email */}
         <div className="bg-secondary/30 border border-border rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-2">
-            <h3 className="font-bold text-base">Персональный консьерж SABYR</h3>
+            <h3 className="font-bold text-base">Заказ и вопросы — @sabyr.wear</h3>
             <p className="text-xs text-muted-foreground max-w-md leading-relaxed">
-              Задайте любой вопрос по заказу, доставке, размерам или наличию изделий в Direct или по почте.
+              Напишите нам в Instagram Direct для подбора точного размера по росту и весу, уточнения наличия или оформления заказа.
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <a
               href="https://www.instagram.com/sabyr.wear/?utm_source=ig_web_button_share_sheet"
               target="_blank"

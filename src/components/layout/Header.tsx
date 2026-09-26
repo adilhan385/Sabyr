@@ -35,11 +35,11 @@ function emptySubscribe() {
 }
 
 const NAV_LINKS = [
-  { href: "/catalog", label: "Каталог", isSpecial: false },
-  { href: "/club", label: "SABYR CLUB", isSpecial: false },
-  { href: "/ai-stylist", label: "AI Стилист", isSpecial: true },
-  { href: "/ai-tryon", label: "Примерочная", isSpecial: false },
-  { href: "/gift-cards", label: "Сертификаты", isSpecial: false },
+  { href: "/catalog", label: "Каталог", isSpecial: false, isClub: false },
+  { href: "/club", label: "SABYR CLUB", isSpecial: false, isClub: true },
+  { href: "/ai-stylist", label: "AI Стилист", isSpecial: true, isClub: true },
+  { href: "/ai-tryon", label: "AI Примерочная", isSpecial: false, isClub: true },
+  { href: "/gift-cards", label: "Сертификаты", isSpecial: false, isClub: false },
 ];
 
 const DRAWER_MAIN_LINKS = [
@@ -174,8 +174,11 @@ export function Header() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="text-xs uppercase tracking-[0.12em] font-medium text-foreground/80 hover:text-foreground transition-colors link-underline"
+                    className="text-xs uppercase tracking-[0.12em] font-medium text-foreground/80 hover:text-foreground transition-colors link-underline flex items-center gap-1.5"
                   >
+                    {link.isClub && (
+                      <Crown className="w-3 h-3 text-[hsl(var(--accent))]" />
+                    )}
                     {link.label}
                   </Link>
                 ))}

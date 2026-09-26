@@ -79,6 +79,17 @@ const stagger = {
 
 export default function HomePage() {
   const [featuredProducts, setFeaturedProducts] = useState(INITIAL_FEATURED);
+  const [heroBadge, setHeroBadge] = useState("Астана • Доставка по Казахстану");
+  const [heroTitle, setHeroTitle] = useState("Первое впечатление без слов.");
+  const [heroSubtitle, setHeroSubtitle] = useState(
+    "Современная повседневная одежда. Лаконичный крой, плотные премиальные ткани и комфорт на каждый день."
+  );
+  const [heroImage, setHeroImage] = useState(
+    "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=2000&q=85"
+  );
+  const [announcementEnabled, setAnnouncementEnabled] = useState(false);
+  const [announcementText, setAnnouncementText] = useState("");
+  const [clubMonthlyPrice, setClubMonthlyPrice] = useState("12 000 ₸");
 
   useEffect(() => {
     fetch("/api/products")
@@ -90,7 +101,7 @@ export default function HomePage() {
             name: p.name,
             price: p.price,
             comparePrice: p.comparePrice,
-            image: p.images?.[0] || "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=1000&q=85",
+            image: p.images?.[0] || "/products/black-suit-1.jpg",
             slug: p.slug,
             isNew: p.isNew ?? false,
             color: p.variants?.[0]?.color || "Базовый оттенок",
@@ -99,22 +110,43 @@ export default function HomePage() {
         }
       })
       .catch((err) => console.error("Error loading products for homepage:", err));
+
+    fetch("/api/admin/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          if (data.site?.hero_badge) setHeroBadge(data.site.hero_badge);
+          if (data.site?.hero_title) setHeroTitle(data.site.hero_title);
+          if (data.site?.hero_subtitle) setHeroSubtitle(data.site.hero_subtitle);
+          if (data.site?.hero_image) setHeroImage(data.site.hero_image);
+          if (data.site?.announcement_enabled === "true") setAnnouncementEnabled(true);
+          if (data.site?.announcement_text) setAnnouncementText(data.site.announcement_text);
+          if (data.club?.monthly_price) setClubMonthlyPrice(data.club.monthly_price);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   return (
     <>
       <Header />
       <main className="min-h-screen bg-background text-foreground">
+        {announcementEnabled && announcementText && (
+          <div className="mt-16 md:mt-20 bg-[#111111] text-[#C9A84C] border-b border-[#C9A84C]/25 py-2.5 px-4 text-center text-[11px] uppercase tracking-[0.18em] font-semibold">
+            {announcementText}
+          </div>
+        )}
         {/* ==================== HERO SECTION ==================== */}
         <section className="relative min-h-[92vh] md:min-h-screen flex items-center justify-start pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden">
           {/* LCP Optimized Background Image with Next/Image */}
           <div className="absolute inset-0 bg-[#0A0A0A]">
             <Image
-              src="https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=2000&q=85"
+              src={heroImage}
               alt="SABYR New Collection Editorial"
               fill
               priority
               quality={90}
+              unoptimized={heroImage.startsWith("data:")}
               sizes="100vw"
               className="object-cover object-center opacity-65 select-none"
             />
@@ -135,7 +167,7 @@ export default function HomePage() {
                 <SabyrAvatar className="w-8 h-8 rounded-full border border-white/20 shadow-md flex-shrink-0" />
                 <span className="w-1.5 h-1.5 rounded-full bg-[#C9A84C] flex-shrink-0" />
                 <p className="text-white/90 text-[11px] md:text-xs tracking-[0.22em] uppercase font-medium">
-                  Астана • Доставка по Казахстану
+                  {heroBadge}
                 </p>
               </div>
 
@@ -144,11 +176,11 @@ export default function HomePage() {
               </div>
 
               <h1 className="font-brand text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold uppercase tracking-[0.06em] leading-[1.2] drop-shadow-sm mb-6">
-                Первое впечатление без слов.
+                {heroTitle}
               </h1>
 
               <p className="text-white/85 text-base md:text-lg max-w-lg mb-10 leading-relaxed font-light drop-shadow-xs">
-                Современная повседневная одежда. Лаконичный крой, плотные премиальные ткани и комфорт на каждый день.
+                {heroSubtitle}
               </p>
 
               <div className="flex flex-wrap items-center gap-4">
@@ -160,11 +192,11 @@ export default function HomePage() {
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
                 <Link
-                  href="/ai-stylist"
-                  className="inline-flex items-center gap-2 px-7 py-4 border border-white/30 text-white text-xs uppercase tracking-[0.14em] font-semibold rounded-full hover:bg-white/10 transition-all backdrop-blur-sm"
+                  href="/club"
+                  className="inline-flex items-center gap-2 px-7 py-4 border border-[#C9A84C]/40 bg-black/40 text-white text-xs uppercase tracking-[0.14em] font-semibold rounded-full hover:bg-white/10 transition-all backdrop-blur-sm"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-[#C9A84C]" />
-                  AI Стилист
+                  <Crown className="w-3.5 h-3.5 text-[#C9A84C]" />
+                  AI Стилист • SABYR CLUB
                 </Link>
               </div>
             </motion.div>
@@ -308,10 +340,10 @@ export default function HomePage() {
 
                   {/* Content */}
                   <div className="relative p-8 sm:p-12 md:p-16 max-w-xl">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md mb-6">
-                      <Sparkles className="w-3.5 h-3.5 text-[#C9A84C]" />
-                      <span className="text-white/90 text-[11px] tracking-[0.2em] uppercase font-medium">
-                        Personal AI Capsule
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/35 backdrop-blur-md mb-6">
+                      <Crown className="w-3.5 h-3.5 text-[#C9A84C]" />
+                      <span className="text-[#C9A84C] text-[11px] tracking-[0.2em] uppercase font-semibold">
+                        Эксклюзивно в SABYR CLUB
                       </span>
                     </div>
 
@@ -322,11 +354,11 @@ export default function HomePage() {
                     </h2>
 
                     <p className="text-white/75 text-sm md:text-base mb-8 leading-relaxed font-light">
-                      Опишите повод или загрузите свой силуэт. Нейросеть составит сбалансированную капсулу исключительно из изделий текущей коллекции SABYR.
+                      Нейросетевой подбор образов и виртуальная AI-Примерочная по вашей фотографии доступны исключительно резидентам закрытого клуба SABYR CLUB.
                     </p>
 
                     <div className="inline-flex items-center gap-2.5 px-8 py-4 bg-white text-black text-xs font-semibold uppercase tracking-[0.14em] rounded-full group-hover:bg-[#C9A84C] transition-all shadow-lg">
-                      Подобрать образ
+                      Открыть AI Стилист
                       <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
@@ -360,7 +392,7 @@ export default function HomePage() {
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 mb-4">
                         <Crown className="w-3.5 h-3.5 text-[#C9A84C]" />
                         <span className="text-[#C9A84C] text-[11px] font-semibold tracking-[0.2em] uppercase">
-                          Закрытый клуб привилегий
+                          Закрытый клуб привилегий • от {clubMonthlyPrice}
                         </span>
                       </div>
 
@@ -370,7 +402,7 @@ export default function HomePage() {
                       </h2>
 
                       <p className="text-white/75 text-sm md:text-base leading-relaxed font-light">
-                        Ранний доступ к закрытым дропам, индивидуальный пошив, выездной консьерж-сервис и приглашения на закрытые показы.
+                        Эксклюзивный доступ к AI-Стилисту и AI-Примерочной по фото, закрытым дропам, повышенному кешбэку и приглашениям на закрытые презентации.
                       </p>
                     </div>
 

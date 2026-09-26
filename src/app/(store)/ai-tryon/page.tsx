@@ -49,9 +49,13 @@ export default function AiTryonPage() {
   const [fitAnalysis, setFitAnalysis] = useState<FitAnalysis | null>(null);
   const [addedNotice, setAddedNotice] = useState(false);
 
+  const [aiClubOnly, setAiClubOnly] = useState(true);
+  const [clubAnnualPrice, setClubAnnualPrice] = useState("99 000 ₸");
+  const [clubMonthlyPrice, setClubMonthlyPrice] = useState("12 000 ₸");
+
   const { addItem, openCart } = useCartStore();
   const { user, isLoading, isGuest } = useSabySession();
-  const hasClubAccess = Boolean(user.clubMembership?.isActive || user.role === "ADMIN");
+  const hasClubAccess = Boolean(!aiClubOnly || user.clubMembership?.isActive || user.role === "ADMIN");
 
   useEffect(() => {
     fetch("/api/products")
@@ -60,6 +64,17 @@ export default function AiTryonPage() {
         if (data.success && Array.isArray(data.products) && data.products.length > 0) {
           setProducts(data.products);
           setSelectedProductId((prev) => prev || data.products[0].id);
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/admin/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.club) {
+          if (data.club.ai_club_only === "false") setAiClubOnly(false);
+          if (data.club.annual_price) setClubAnnualPrice(data.club.annual_price);
+          if (data.club.monthly_price) setClubMonthlyPrice(data.club.monthly_price);
         }
       })
       .catch(() => {});
@@ -153,7 +168,20 @@ export default function AiTryonPage() {
     }, 600);
   };
 
-  if (!isLoading && !hasClubAccess) {
+  if (isLoading) {
+    return (
+      <main className="min-h-screen pb-24 bg-[#0A0A0A] text-white flex items-center justify-center px-4 pt-20">
+        <div className="text-center space-y-3">
+          <Crown className="w-8 h-8 text-[#C9A84C] mx-auto animate-pulse" />
+          <p className="text-xs uppercase tracking-[0.2em] text-white/60">
+            Проверка членства SABYR CLUB...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!hasClubAccess) {
     return (
       <main className="min-h-screen pb-24 bg-[#0A0A0A] text-white flex items-center justify-center px-4 pt-20">
         <div className="max-w-xl w-full rounded-3xl border border-[#C9A84C]/30 bg-gradient-to-b from-[#141414] to-[#0A0A0A] p-8 md:p-12 text-center space-y-6 shadow-2xl">
@@ -170,6 +198,10 @@ export default function AiTryonPage() {
           <p className="text-white/70 text-sm md:text-base leading-relaxed font-light">
             Виртуальная примерка изделий на вашу фотографию и AI-анализ посадки доступны исключительно резидентам закрытого клуба <strong className="text-[#C9A84C] font-semibold">SABYR CLUB</strong>.
           </p>
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs text-white/80 space-y-1">
+            <p className="font-semibold text-[#C9A84C] uppercase tracking-wider">Тарифы членства SABYR CLUB</p>
+            <p>Месячная подписка: <strong className="text-white">{clubMonthlyPrice}</strong> · Годовая карта: <strong className="text-white">{clubAnnualPrice}</strong></p>
+          </div>
           <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/club"

@@ -21,6 +21,8 @@ import {
   Pencil,
   Percent,
   Upload,
+  Lock,
+  X,
 } from "lucide-react";
 import { PRODUCTS, ProductItem } from "@/data/mockData";
 import { formatPrice } from "@/lib/utils";
@@ -38,8 +40,10 @@ type AdminTab =
   | "content"
   | "notifications";
 
+const ALL_AVAILABLE_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
+
 export default function AdminPage() {
-  const [currentTab, setCurrentTab] = useState<AdminTab>("products");
+  const [currentTab, setCurrentTab] = useState<AdminTab>("club");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -54,15 +58,28 @@ export default function AdminPage() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [newProductName, setNewProductName] = useState("");
   const [newProductCategory, setNewProductCategory] = useState("Худи и свитшоты");
-  const [newProductPrice, setNewProductPrice] = useState(50000);
+  const [newProductPrice, setNewProductPrice] = useState(29990);
   const [newProductComparePrice, setNewProductComparePrice] = useState<string>("");
   const [newProductImageUrl, setNewProductImageUrl] = useState("");
+  const [newProductImages, setNewProductImages] = useState<string[]>([]);
   const [newProductDescription, setNewProductDescription] = useState("");
   const [newProductComposition, setNewProductComposition] = useState("");
+  const [newProductCare, setNewProductCare] = useState(
+    "Деликатная стирка при 30°C на изнаночной стороне, не отбеливать, гладить на низкой температуре."
+  );
   const [newProductColor, setNewProductColor] = useState("Чёрный");
-  const [newProductStock, setNewProductStock] = useState(5);
+  const [newProductSizes, setNewProductSizes] = useState<string[]>([
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+  ]);
+  const [newProductStock, setNewProductStock] = useState(8);
   const [newProductClubOnly, setNewProductClubOnly] = useState(false);
   const [newProductIsNew, setNewProductIsNew] = useState(true);
+  const [newProductIsBestSeller, setNewProductIsBestSeller] = useState(false);
 
   // Orders state
   interface AdminOrder {
@@ -80,6 +97,7 @@ export default function AdminPage() {
   }
 
   const [ordersList, setOrdersList] = useState<AdminOrder[]>([]);
+
   // Customers state
   interface AdminCustomer {
     id: string;
@@ -96,6 +114,7 @@ export default function AdminPage() {
   }
 
   const [customersList, setCustomersList] = useState<AdminCustomer[]>([]);
+  const [searchCustomer, setSearchCustomer] = useState("");
 
   // Promo codes state
   interface AdminPromo {
@@ -125,7 +144,6 @@ export default function AdminPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
 
-
   // Gift Cards state
   interface AdminGiftCard {
     id: string;
@@ -139,20 +157,49 @@ export default function AdminPage() {
   const [newGiftAmount, setNewGiftAmount] = useState(50000);
 
   // Bonus levels settings
-  const [bonusLevels] = useState([
-    { level: "Level 1 — Starter", minSpend: 0, percent: 3, activeUsers: 0 },
-    { level: "Level 2 — Silver", minSpend: 150000, percent: 5, activeUsers: 0 },
-    { level: "Level 3 — Gold", minSpend: 300000, percent: 7, activeUsers: 0 },
-    { level: "Level 4 — Platinum VIP", minSpend: 600000, percent: 10, activeUsers: 0 },
+  interface AdminBonusLevel {
+    id?: string;
+    name: string;
+    minSpend: number;
+    percent: number;
+  }
+  const [bonusLevels, setBonusLevels] = useState<AdminBonusLevel[]>([
+    { name: "Level 1 — Starter", minSpend: 0, percent: 3 },
+    { name: "Level 2 — Silver", minSpend: 150000, percent: 5 },
+    { name: "Level 3 — Gold", minSpend: 300000, percent: 7 },
+    { name: "Level 4 — Platinum VIP", minSpend: 600000, percent: 10 },
   ]);
+  const [savingBonuses, setSavingBonuses] = useState(false);
 
-  // Club & Hero content settings
-  const [clubAnnualPrice, setClubAnnualPrice] = useState("190 000 ₸");
+  // SABYR CLUB & AI settings
+  const [clubAnnualPrice, setClubAnnualPrice] = useState("99 000 ₸");
+  const [clubMonthlyPrice, setClubMonthlyPrice] = useState("12 000 ₸");
   const [clubWelcomeDeposit, setClubWelcomeDeposit] = useState("25 000 ₸");
-  const [heroTitle, setHeroTitle] = useState("Новая коллекция Осень-Зима");
-  const [heroSubtitle, setHeroSubtitle] = useState(
-    "Минимализм, который говорит. Качество, которое чувствуется."
+  const [clubCashbackPercent, setClubCashbackPercent] = useState("10");
+  const [clubSubtitle, setClubSubtitle] = useState(
+    "Закрытое сообщество ценителей минималистичной роскоши. Приоритетный доступ к лимитированным дропам, AI-Стилисту, AI-Примерочной и персональному сервису."
   );
+  const [aiClubOnly, setAiClubOnly] = useState(true);
+  const [savingClub, setSavingClub] = useState(false);
+
+  // Site / Homepage / Delivery / Contacts settings
+  const [heroBadge, setHeroBadge] = useState("Collection 2026 · Almaty · Astana");
+  const [heroTitle, setHeroTitle] = useState("Философия тишины и чистой формы.");
+  const [heroSubtitle, setHeroSubtitle] = useState(
+    "Лимитированные дропы базового гардероба в стиле quiet luxury. Плотный хлопок 100% Пенье, безупречный крой и выверенные пропорции от S до 3XL."
+  );
+  const [heroImage, setHeroImage] = useState("/products/1-1.jpg");
+  const [announcementEnabled, setAnnouncementEnabled] = useState(true);
+  const [announcementText, setAnnouncementText] = useState(
+    "Бесплатная доставка по Казахстану от 50 000 ₸ · Лимитированная коллекция @sabyr.wear"
+  );
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState("50000");
+  const [courierDeliveryCost, setCourierDeliveryCost] = useState("2500");
+  const [contactPhone, setContactPhone] = useState("+7 (777) 000-00-00");
+  const [contactWhatsapp, setContactWhatsapp] = useState("https://wa.me/77770000000");
+  const [contactInstagram, setContactInstagram] = useState("https://www.instagram.com/sabyr.wear");
+  const [brandCity, setBrandCity] = useState("Алматы · Астана · Доставка по всему Казахстану");
+  const [savingSite, setSavingSite] = useState(false);
 
   // Notifications state
   interface AdminNotificationLog {
@@ -249,10 +296,35 @@ export default function AdminPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
-          if (data.site?.hero_title) setHeroTitle(data.site.hero_title);
-          if (data.site?.hero_subtitle) setHeroSubtitle(data.site.hero_subtitle);
-          if (data.club?.annual_price) setClubAnnualPrice(data.club.annual_price);
-          if (data.club?.welcome_deposit) setClubWelcomeDeposit(data.club.welcome_deposit);
+          if (data.site) {
+            if (data.site.hero_badge) setHeroBadge(data.site.hero_badge);
+            if (data.site.hero_title) setHeroTitle(data.site.hero_title);
+            if (data.site.hero_subtitle) setHeroSubtitle(data.site.hero_subtitle);
+            if (data.site.hero_image) setHeroImage(data.site.hero_image);
+            if (data.site.announcement_enabled !== undefined) {
+              setAnnouncementEnabled(data.site.announcement_enabled !== "false");
+            }
+            if (data.site.announcement_text) setAnnouncementText(data.site.announcement_text);
+            if (data.site.free_delivery_threshold) setFreeDeliveryThreshold(data.site.free_delivery_threshold);
+            if (data.site.courier_delivery_cost) setCourierDeliveryCost(data.site.courier_delivery_cost);
+            if (data.site.contact_phone) setContactPhone(data.site.contact_phone);
+            if (data.site.contact_whatsapp) setContactWhatsapp(data.site.contact_whatsapp);
+            if (data.site.contact_instagram) setContactInstagram(data.site.contact_instagram);
+            if (data.site.brand_city) setBrandCity(data.site.brand_city);
+          }
+          if (data.club) {
+            if (data.club.annual_price) setClubAnnualPrice(data.club.annual_price);
+            if (data.club.monthly_price) setClubMonthlyPrice(data.club.monthly_price);
+            if (data.club.welcome_deposit) setClubWelcomeDeposit(data.club.welcome_deposit);
+            if (data.club.cashback_percent) setClubCashbackPercent(data.club.cashback_percent);
+            if (data.club.club_subtitle) setClubSubtitle(data.club.club_subtitle);
+            if (data.club.ai_club_only !== undefined) {
+              setAiClubOnly(data.club.ai_club_only !== "false");
+            }
+          }
+          if (Array.isArray(data.bonusLevels) && data.bonusLevels.length > 0) {
+            setBonusLevels(data.bonusLevels);
+          }
         }
       })
       .catch(() => {});
@@ -263,26 +335,38 @@ export default function AdminPage() {
     loadCategories();
   }, []);
 
-
   const filteredProducts = productsList.filter(
     (p) =>
       p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
       p.category.toLowerCase().includes(searchProduct.toLowerCase())
   );
 
+  const filteredCustomers = customersList.filter(
+    (c) =>
+      c.name.toLowerCase().includes(searchCustomer.toLowerCase()) ||
+      c.phone.toLowerCase().includes(searchCustomer.toLowerCase()) ||
+      c.email.toLowerCase().includes(searchCustomer.toLowerCase())
+  );
+
   const openAddProductModal = () => {
     setEditingProductId(null);
     setNewProductName("");
     setNewProductCategory(categoriesList[0]?.name || "Худи и свитшоты");
-    setNewProductPrice(50000);
+    setNewProductPrice(29990);
     setNewProductComparePrice("");
-    setNewProductImageUrl("/example-product.svg");
+    setNewProductImageUrl("");
+    setNewProductImages(["/products/1-1.jpg"]);
     setNewProductDescription("");
-    setNewProductComposition("100% натуральные ткани премиального качества.");
+    setNewProductComposition("100% турецкий хлопок Пенье премиального качества.");
+    setNewProductCare(
+      "Деликатная стирка при 30°C на изнаночной стороне, не отбеливать, гладить на низкой температуре."
+    );
     setNewProductColor("Чёрный");
-    setNewProductStock(5);
+    setNewProductSizes(["S", "M", "L", "XL", "2XL", "3XL"]);
+    setNewProductStock(8);
     setNewProductClubOnly(false);
     setNewProductIsNew(true);
+    setNewProductIsBestSeller(false);
     setIsAddModalOpen(true);
   };
 
@@ -292,13 +376,24 @@ export default function AdminPage() {
     setNewProductCategory(product.category);
     setNewProductPrice(product.price);
     setNewProductComparePrice(product.comparePrice ? String(product.comparePrice) : "");
-    setNewProductImageUrl(product.images?.[0] || "/example-product.svg");
+    const imgs = product.images && product.images.length > 0 ? product.images : ["/products/1-1.jpg"];
+    setNewProductImages(imgs);
+    setNewProductImageUrl("");
     setNewProductDescription(product.description || "");
     setNewProductComposition(product.composition || "");
+    setNewProductCare(
+      product.care ||
+        "Деликатная стирка при 30°C на изнаночной стороне, не отбеливать, гладить на низкой температуре."
+    );
     setNewProductColor(product.variants?.[0]?.color || "Чёрный");
-    setNewProductStock(product.variants?.[0]?.stock ?? 5);
+    const existingSizes = Array.from(new Set((product.variants || []).map((v) => v.size)));
+    setNewProductSizes(
+      existingSizes.length > 0 ? existingSizes : ["S", "M", "L", "XL", "2XL", "3XL"]
+    );
+    setNewProductStock(product.variants?.[0]?.stock ?? 8);
     setNewProductClubOnly(Boolean(product.isClubOnly));
     setNewProductIsNew(product.isNew ?? true);
+    setNewProductIsBestSeller(Boolean(product.isBestSeller));
     setIsAddModalOpen(true);
   };
 
@@ -308,10 +403,39 @@ export default function AdminPage() {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        setNewProductImageUrl(reader.result);
+        setNewProductImages((prev) => [...prev, reader.result as string]);
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleHeroImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setHeroImage(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddImageUrlToList = () => {
+    const trimmed = newProductImageUrl.trim();
+    if (!trimmed) return;
+    setNewProductImages((prev) => [...prev, trimmed]);
+    setNewProductImageUrl("");
+  };
+
+  const handleRemoveImageFromList = (index: number) => {
+    setNewProductImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const toggleProductSize = (size: string) => {
+    setNewProductSizes((prev) =>
+      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
+    );
   };
 
   const applyDiscountPresetInModal = (discountPercent: number | null) => {
@@ -373,14 +497,52 @@ export default function AdminPage() {
     }
   };
 
+  const handleToggleProductClub = async (product: ProductItem) => {
+    const nextClubStatus = !product.isClubOnly;
+    setProductsList((prev) =>
+      prev.map((item) =>
+        item.id === product.id ? { ...item, isClubOnly: nextClubStatus } : item
+      )
+    );
+
+    try {
+      const res = await fetch("/api/products", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: product.id,
+          isClubOnly: nextClubStatus,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          nextClubStatus
+            ? `Изделие «${product.name}» переведено в закрытый доступ SABYR CLUB`
+            : `Изделие «${product.name}» открыто для общего каталога`
+        );
+      }
+    } catch (err) {
+      console.error("Error toggling product club status:", err);
+    }
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const compareVal =
       newProductComparePrice.trim() && Number(newProductComparePrice) > Number(newProductPrice)
         ? Number(newProductComparePrice)
         : null;
-    const imgList = [newProductImageUrl.trim() || "/example-product.svg"];
-    const variantsList = ["XS", "S", "M", "L"].map((size, idx) => ({
+
+    const finalImages =
+      newProductImages.length > 0
+        ? newProductImages
+        : [newProductImageUrl.trim() || "/products/1-1.jpg"];
+
+    const activeSizes =
+      newProductSizes.length > 0 ? newProductSizes : ["S", "M", "L", "XL", "2XL", "3XL"];
+
+    const variantsList = activeSizes.map((size, idx) => ({
       id: `${editingProductId || "new"}-v${idx}`,
       color: newProductColor || "Чёрный",
       colorHex: "#0D0D0D",
@@ -401,10 +563,12 @@ export default function AdminPage() {
             comparePrice: compareVal,
             description: newProductDescription,
             composition: newProductComposition,
-            images: imgList,
+            care: newProductCare,
+            images: finalImages,
             variants: variantsList,
             isClubOnly: newProductClubOnly,
             isNew: newProductIsNew,
+            isBestSeller: newProductIsBestSeller,
           }),
         });
         const data = await res.json();
@@ -423,10 +587,12 @@ export default function AdminPage() {
             comparePrice: compareVal,
             description: newProductDescription,
             composition: newProductComposition,
-            images: imgList,
+            care: newProductCare,
+            images: finalImages,
             variants: variantsList,
             isClubOnly: newProductClubOnly,
             isNew: newProductIsNew,
+            isBestSeller: newProductIsBestSeller,
           }),
         });
         const data = await res.json();
@@ -487,7 +653,12 @@ export default function AdminPage() {
 
   const handleCustomerAction = async (
     userId: string,
-    payload: { bonusDelta?: number; toggleClub?: boolean; toggleBlock?: boolean }
+    payload: {
+      bonusDelta?: number;
+      toggleClub?: boolean;
+      toggleBlock?: boolean;
+      toggleRole?: boolean;
+    }
   ) => {
     try {
       const res = await fetch("/api/admin/customers", {
@@ -497,11 +668,15 @@ export default function AdminPage() {
       });
       if (res.ok) {
         loadCustomers();
-        showToast(
-          payload.toggleBlock
-            ? "Статус блокировки клиента изменён"
-            : "Профиль клиента обновлён"
-        );
+        if (payload.toggleClub) {
+          showToast("Статус членства в SABYR CLUB обновлён");
+        } else if (payload.toggleBlock) {
+          showToast("Статус блокировки клиента изменён");
+        } else if (payload.toggleRole) {
+          showToast("Роль пользователя обновлена");
+        } else {
+          showToast("Бонусный баланс клиента обновлён");
+        }
       }
     } catch {
       // ignore
@@ -562,33 +737,74 @@ export default function AdminPage() {
   };
 
   const handleSaveClubSettings = async () => {
-    await fetch("/api/admin/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scope: "club",
-        entries: {
-          annual_price: clubAnnualPrice,
-          welcome_deposit: clubWelcomeDeposit,
-        },
-      }),
-    });
-    showToast("Условия SABYR CLUB сохранены в БД");
+    setSavingClub(true);
+    try {
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: "club",
+          entries: {
+            annual_price: clubAnnualPrice,
+            monthly_price: clubMonthlyPrice,
+            welcome_deposit: clubWelcomeDeposit,
+            cashback_percent: clubCashbackPercent,
+            club_subtitle: clubSubtitle,
+            ai_club_only: aiClubOnly ? "true" : "false",
+          },
+        }),
+      });
+      showToast("Настройки SABYR CLUB, цены и доступ к AI сохранены в БД");
+    } finally {
+      setSavingClub(false);
+    }
+  };
+
+  const handleSaveBonusLevels = async () => {
+    setSavingBonuses(true);
+    try {
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: "bonus",
+          bonusLevels,
+        }),
+      });
+      showToast("Уровни бонусной программы сохранены в БД");
+    } finally {
+      setSavingBonuses(false);
+    }
   };
 
   const handleSaveHeroContent = async () => {
-    await fetch("/api/admin/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scope: "site",
-        entries: {
-          hero_title: heroTitle,
-          hero_subtitle: heroSubtitle,
-        },
-      }),
-    });
-    showToast("Контент главной страницы сохранён в БД");
+    setSavingSite(true);
+    try {
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: "site",
+          entries: {
+            hero_badge: heroBadge,
+            hero_title: heroTitle,
+            hero_subtitle: heroSubtitle,
+            hero_image: heroImage,
+            announcement_enabled: announcementEnabled ? "true" : "false",
+            announcement_text: announcementText,
+            free_delivery_threshold: freeDeliveryThreshold,
+            courier_delivery_cost: courierDeliveryCost,
+            contact_phone: contactPhone,
+            contact_whatsapp: contactWhatsapp,
+            contact_instagram: contactInstagram,
+            brand_city: brandCity,
+          },
+        }),
+      });
+      showToast("Настройки главной страницы, доставки и контактов сохранены в БД");
+    } finally {
+      setSavingSite(false);
+    }
   };
 
   const handleSendBroadcast = async (e: React.FormEvent) => {
@@ -618,7 +834,6 @@ export default function AdminPage() {
       setNotifSending(false);
     }
   };
-
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -685,27 +900,43 @@ export default function AdminPage() {
     }
   };
 
+  const clubMembersCount = customersList.filter((c) => c.club).length;
+  const clubProductsCount = productsList.filter((p) => p.isClubOnly).length;
+
   return (
     <div className="min-h-screen bg-secondary/30 flex flex-col">
       {/* Top Admin Bar */}
       <header className="bg-background border-b border-border sticky top-0 z-sticky">
         <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-            <Link href="/" className="text-foreground hover:opacity-85 transition-opacity inline-flex items-center" aria-label="SABYR">
+            <Link
+              href="/"
+              className="text-foreground hover:opacity-85 transition-opacity inline-flex items-center"
+              aria-label="SABYR"
+            >
               <SabyrLogo className="h-3.5 sm:h-4 w-auto" />
             </Link>
             <span className="px-2.5 py-0.5 rounded-md bg-foreground text-background text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap">
-              Admin Panel
+              Admin Panel · Полный контроль
             </span>
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
             <Link
+              href="/club"
+              target="_blank"
+              className="text-xs text-muted-foreground hover:text-foreground hidden md:flex items-center gap-1 whitespace-nowrap"
+            >
+              <span>Страница SABYR CLUB</span>
+              <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+            </Link>
+            <Link
               href="/"
               target="_blank"
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 whitespace-nowrap"
             >
-              <span className="hidden sm:inline">Сайт для клиентов</span> <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden sm:inline">Сайт для клиентов</span>
+              <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
             </Link>
             <div className="w-8 h-8 rounded-full bg-foreground text-background text-xs font-bold flex items-center justify-center flex-shrink-0">
               AD
@@ -719,16 +950,16 @@ export default function AdminPage() {
         {/* Sidebar Nav */}
         <aside className="w-full md:w-64 bg-background border-r border-border p-4 space-y-1">
           {[
-            { id: "analytics", label: "Аналитика и продажи", icon: BarChart3 },
+            { id: "club", label: "SABYR CLUB и AI", icon: Crown },
             { id: "products", label: "Товары и остатки", icon: Package },
             { id: "categories", label: "Категории одежды", icon: Folder },
             { id: "orders", label: "Заказы клиентов", icon: ShoppingBag },
-            { id: "customers", label: "База клиентов", icon: Users },
+            { id: "customers", label: "База клиентов и роли", icon: Users },
+            { id: "content", label: "Главная, доставка, контакты", icon: LayoutTemplate },
             { id: "bonuses", label: "Бонусы и уровни", icon: Sparkles },
-            { id: "club", label: "SABYR CLUB", icon: Crown },
             { id: "promos", label: "Промокоды и карты", icon: Tag },
-            { id: "content", label: "Баннеры и Главная", icon: LayoutTemplate },
             { id: "notifications", label: "Уведомления", icon: Bell },
+            { id: "analytics", label: "Аналитика и продажи", icon: BarChart3 },
           ].map((item) => {
             const Icon = item.icon;
             const active = currentTab === item.id;
@@ -751,13 +982,26 @@ export default function AdminPage() {
 
         {/* Workspace Body */}
         <main className="flex-1 p-6 md:p-8 max-w-7xl overflow-x-hidden">
+          {statusMessage && (
+            <div className="mb-6 p-3.5 rounded-xl bg-foreground text-background text-xs font-medium flex items-center justify-between gap-3">
+              <span>{statusMessage}</span>
+              <button
+                type="button"
+                onClick={() => setStatusMessage(null)}
+                className="text-[11px] opacity-75 hover:opacity-100"
+              >
+                Закрыть
+              </button>
+            </div>
+          )}
+
           {/* TAB 1: Analytics */}
           {currentTab === "analytics" && (
             <div className="space-y-8">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Аналитика и показатели SABYR</h1>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Данные из базы — заказы, клиенты, товары
+                  Сводка по каталогу, заказам, клиентам и резидентам закрытого клуба
                 </p>
               </div>
 
@@ -766,25 +1010,31 @@ export default function AdminPage() {
                 <div className="p-5 border border-border rounded-2xl bg-card">
                   <span className="text-xs text-muted-foreground">Всего заказов</span>
                   <div className="text-2xl font-extrabold mt-1 tabular-nums">{ordersList.length}</div>
-                  <span className="text-[11px] text-muted-foreground">Загружено из БД</span>
+                  <span className="text-[11px] text-muted-foreground">В базе данных</span>
                 </div>
 
                 <div className="p-5 border border-border rounded-2xl bg-card">
-                  <span className="text-xs text-muted-foreground">Клиентов в базе</span>
+                  <span className="text-xs text-muted-foreground">Пользователей в базе</span>
                   <div className="text-2xl font-extrabold mt-1 tabular-nums">{customersList.length}</div>
-                  <span className="text-[11px] text-muted-foreground">Без администраторов</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Из них резидентов клуба: {clubMembersCount}
+                  </span>
                 </div>
 
                 <div className="p-5 border border-border rounded-2xl bg-card">
                   <span className="text-xs text-muted-foreground">Товаров в каталоге</span>
                   <div className="text-2xl font-extrabold mt-1 tabular-nums">{productsList.length}</div>
-                  <span className="text-[11px] text-muted-foreground">Активных позиций</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Клубных дропов: {clubProductsCount}
+                  </span>
                 </div>
 
                 <div className="p-5 border border-border rounded-2xl bg-card">
-                  <span className="text-xs text-muted-foreground">Категорий одежды</span>
-                  <div className="text-2xl font-extrabold mt-1 tabular-nums">{categoriesList.length}</div>
-                  <span className="text-[11px] text-muted-foreground">Управляйте в разделе</span>
+                  <span className="text-xs text-muted-foreground">Тариф SABYR CLUB</span>
+                  <div className="text-2xl font-extrabold mt-1 tabular-nums">{clubAnnualPrice}</div>
+                  <span className="text-[11px] text-muted-foreground">
+                    Месячный: {clubMonthlyPrice}
+                  </span>
                 </div>
               </div>
 
@@ -793,34 +1043,40 @@ export default function AdminPage() {
                 <div className="border border-border rounded-2xl p-6 bg-card space-y-4">
                   <h3 className="font-bold text-sm">Товары каталога</h3>
                   <div className="divide-y divide-border text-xs">
-                    {productsList.slice(0, 5).map((p) => (
+                    {productsList.slice(0, 8).map((p) => (
                       <div key={p.id} className="py-3 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="relative w-10 h-12 rounded bg-secondary overflow-hidden flex-shrink-0">
-                            <Image src={p.images[0]} alt={p.name} fill className="object-cover" unoptimized />
+                            <Image
+                              src={p.images[0] || "/products/1-1.jpg"}
+                              alt={p.name}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                            />
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold truncate">{p.name}</p>
                             <span className="text-muted-foreground block truncate">{p.category}</span>
                           </div>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <span className="font-bold tabular-nums whitespace-nowrap">{formatPrice(p.price)}</span>
+                        <div className="text-right flex-shrink-0 flex items-center gap-3">
+                          {p.isClubOnly && (
+                            <span className="px-2 py-0.5 rounded bg-black text-[hsl(var(--accent))] text-[10px] font-bold">
+                              CLUB ONLY
+                            </span>
+                          )}
+                          <span className="font-bold tabular-nums whitespace-nowrap">
+                            {formatPrice(p.price)}
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
-              {productsList.length === 0 && ordersList.length === 0 && (
-                <div className="border border-border rounded-2xl p-10 bg-card text-center text-sm text-muted-foreground">
-                  Данные загружаются из базы данных. Добавьте первый товар или заказ, чтобы увидеть статистику.
-                </div>
-              )}
             </div>
           )}
-
 
           {/* TAB 2: Products CRUD */}
           {currentTab === "products" && (
@@ -829,7 +1085,7 @@ export default function AdminPage() {
                 <div>
                   <h1 className="text-2xl font-bold tracking-tight">Управление одеждой и скидками</h1>
                   <p className="text-xs text-muted-foreground">
-                    Добавляйте одежду, меняйте цены, назначайте скидки, загружайте фото и управляйте остатками ({productsList.length} шт.)
+                    Добавляйте одежду, меняйте цены, назначайте скидки, переключайте CLUB ONLY и управляйте остатками ({productsList.length} шт.)
                   </p>
                 </div>
                 <button
@@ -863,14 +1119,15 @@ export default function AdminPage() {
                         <th className="p-4">Категория</th>
                         <th className="p-4">Цена и Скидка</th>
                         <th className="p-4">Быстрая скидка</th>
-                        <th className="p-4">Остатки</th>
-                        <th className="p-4">Доступ</th>
+                        <th className="p-4">Остатки / Размеры</th>
+                        <th className="p-4">Доступ (Клуб)</th>
                         <th className="p-4 text-right">Действия</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredProducts.map((p) => {
                         const totalStock = p.variants.reduce((acc, v) => acc + v.stock, 0);
+                        const sizesStr = Array.from(new Set(p.variants.map((v) => v.size))).join(", ");
                         const hasDiscount = Boolean(p.comparePrice && p.comparePrice > p.price);
                         const discountPct =
                           hasDiscount && p.comparePrice
@@ -882,7 +1139,7 @@ export default function AdminPage() {
                               <div className="flex items-center gap-3">
                                 <div className="relative w-11 h-14 rounded-lg bg-secondary overflow-hidden flex-shrink-0 border border-border/50">
                                   <Image
-                                    src={p.images[0] || "/example-product.svg"}
+                                    src={p.images[0] || "/products/1-1.jpg"}
                                     alt={p.name}
                                     fill
                                     unoptimized={
@@ -894,8 +1151,8 @@ export default function AdminPage() {
                                 </div>
                                 <div className="min-w-[140px]">
                                   <p className="font-semibold break-words">{p.name}</p>
-                                  <span className="text-[10px] text-muted-foreground break-all">
-                                    ID: {p.id}
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Фото: {p.images.length} шт.
                                   </span>
                                 </div>
                               </div>
@@ -944,24 +1201,32 @@ export default function AdminPage() {
                               </div>
                             </td>
                             <td className="p-4 whitespace-nowrap">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-semibold tabular-nums ${
-                                  totalStock > 5
-                                    ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400"
-                                    : "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400"
-                                }`}
-                              >
-                                {totalStock} шт.
-                              </span>
+                              <div className="flex flex-col gap-0.5">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold tabular-nums w-fit ${
+                                    totalStock > 5
+                                      ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400"
+                                      : "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400"
+                                  }`}
+                                >
+                                  {totalStock} шт.
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">{sizesStr}</span>
+                              </div>
                             </td>
                             <td className="p-4 whitespace-nowrap">
-                              {p.isClubOnly ? (
-                                <span className="px-2 py-0.5 rounded bg-black text-[hsl(var(--accent))] text-[10px] font-bold">
-                                  CLUB ONLY
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">Общий каталог</span>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleProductClub(p)}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                                  p.isClubOnly
+                                    ? "bg-black text-[hsl(var(--accent))] hover:opacity-85"
+                                    : "border border-border text-muted-foreground hover:text-foreground hover:bg-secondary"
+                                }`}
+                                title="Нажмите, чтобы переключить доступ (CLUB ONLY / Общий каталог)"
+                              >
+                                {p.isClubOnly ? "CLUB ONLY (Вкл)" : "Общий каталог"}
+                              </button>
                             </td>
                             <td className="p-4 text-right whitespace-nowrap">
                               <div className="inline-flex items-center gap-1.5">
@@ -995,19 +1260,20 @@ export default function AdminPage() {
               {/* Add / Edit Product Modal */}
               {isAddModalOpen && (
                 <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-                  <div className="bg-card border border-border rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl my-8">
+                  <div className="bg-card border border-border rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8 max-h-[92vh] overflow-y-auto">
                     <div className="flex items-center justify-between border-b border-border pb-3">
                       <h3 className="font-bold text-lg">
                         {editingProductId
-                          ? "Редактировать одежду / цену / скидку"
+                          ? "Редактировать одежду / цену / фото"
                           : "Добавить новую одежду в каталог"}
                       </h3>
                       <button
                         type="button"
                         onClick={() => setIsAddModalOpen(false)}
-                        className="text-xs text-muted-foreground hover:text-foreground"
+                        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
                       >
-                        Закрыть ✕
+                        <span>Закрыть</span>
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
@@ -1020,7 +1286,7 @@ export default function AdminPage() {
                             required
                             value={newProductName}
                             onChange={(e) => setNewProductName(e.target.value)}
-                            placeholder="Например: Пример или Шерстяной жакет"
+                            placeholder="Например: Трикотажный свитшот на молнии"
                             className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
                           />
                         </div>
@@ -1033,7 +1299,9 @@ export default function AdminPage() {
                           >
                             {categoriesList.length > 0 ? (
                               categoriesList.map((cat) => (
-                                <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                <option key={cat.id} value={cat.name}>
+                                  {cat.name}
+                                </option>
                               ))
                             ) : (
                               <>
@@ -1052,7 +1320,7 @@ export default function AdminPage() {
 
                       {/* Price & Discount Block */}
                       <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
                           <span className="font-bold flex items-center gap-1.5">
                             <Percent className="w-3.5 h-3.5 text-[hsl(var(--accent))]" />
                             Цена и управление скидкой
@@ -1100,27 +1368,62 @@ export default function AdminPage() {
                               type="number"
                               value={newProductComparePrice}
                               onChange={(e) => setNewProductComparePrice(e.target.value)}
-                              placeholder="Например: 65000 (зачёркнутая цена)"
+                              placeholder="Например: 35000 (зачёркнутая цена)"
                               className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
                             />
                           </div>
                         </div>
                       </div>
 
-                      {/* Image URL or File Upload */}
+                      {/* Multiple Images Manager */}
                       <div className="space-y-2">
-                        <label className="block font-semibold">Фотография одежды (ссылка или файл)</label>
+                        <label className="block font-semibold">
+                          Фотографии изделия ({newProductImages.length} шт.)
+                        </label>
+                        {newProductImages.length > 0 && (
+                          <div className="flex flex-wrap gap-2.5 pb-1">
+                            {newProductImages.map((img, idx) => (
+                              <div
+                                key={idx}
+                                className="relative w-16 h-20 rounded-lg border border-border overflow-hidden bg-secondary group"
+                              >
+                                <Image
+                                  src={img}
+                                  alt={`Фото ${idx + 1}`}
+                                  fill
+                                  unoptimized
+                                  className="object-cover"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveImageFromList(idx)}
+                                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/80 text-white flex items-center justify-center text-[10px]"
+                                  title="Удалить фото"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <div className="flex flex-col sm:flex-row gap-2">
                           <input
                             type="text"
                             value={newProductImageUrl}
                             onChange={(e) => setNewProductImageUrl(e.target.value)}
-                            placeholder="https://... или /example-product.svg"
+                            placeholder="/products/1-1.jpg или https://..."
                             className="flex-1 px-3.5 py-2 border border-border rounded-lg bg-background"
                           />
+                          <button
+                            type="button"
+                            onClick={handleAddImageUrlToList}
+                            className="px-3.5 py-2 border border-border rounded-lg bg-secondary hover:bg-secondary/80 font-medium whitespace-nowrap"
+                          >
+                            + Добавить ссылку
+                          </button>
                           <label className="px-3.5 py-2 border border-border rounded-lg bg-secondary hover:bg-secondary/80 cursor-pointer inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap">
                             <Upload className="w-3.5 h-3.5" />
-                            <span>Загрузить с устройства</span>
+                            <span>Загрузить файл</span>
                             <input
                               type="file"
                               accept="image/*"
@@ -1128,6 +1431,30 @@ export default function AdminPage() {
                               className="hidden"
                             />
                           </label>
+                        </div>
+                      </div>
+
+                      {/* Sizes Selector */}
+                      <div>
+                        <label className="block font-semibold mb-1.5">Доступные размеры</label>
+                        <div className="flex flex-wrap gap-2">
+                          {ALL_AVAILABLE_SIZES.map((sz) => {
+                            const active = newProductSizes.includes(sz);
+                            return (
+                              <button
+                                key={sz}
+                                type="button"
+                                onClick={() => toggleProductSize(sz)}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                  active
+                                    ? "bg-foreground text-background border-foreground"
+                                    : "bg-background text-muted-foreground border-border hover:border-foreground"
+                                }`}
+                              >
+                                {sz}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -1149,7 +1476,7 @@ export default function AdminPage() {
                             rows={2}
                             value={newProductComposition}
                             onChange={(e) => setNewProductComposition(e.target.value)}
-                            placeholder="Например: 90% шерсть, 10% кашемир"
+                            placeholder="Например: 100% турецкий хлопок Пенье"
                             className="w-full px-3 py-2 border border-border rounded-lg bg-background resize-none"
                           />
                         </div>
@@ -1163,13 +1490,13 @@ export default function AdminPage() {
                             type="text"
                             value={newProductColor}
                             onChange={(e) => setNewProductColor(e.target.value)}
-                            placeholder="Чёрный / Бежевый / Молочный"
+                            placeholder="Чёрный / Тёмно-синий / Серый меланж"
                             className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
                           />
                         </div>
                         <div>
                           <label className="block font-semibold mb-1">
-                            Остаток на каждый размер (XS, S, M, L)
+                            Остаток на каждый выбранный размер
                           </label>
                           <input
                             type="number"
@@ -1191,6 +1518,16 @@ export default function AdminPage() {
                             className="accent-foreground flex-shrink-0"
                           />
                           <span>Отметить как «NEW» (Новинка)</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer font-medium">
+                          <input
+                            type="checkbox"
+                            checked={newProductIsBestSeller}
+                            onChange={(e) => setNewProductIsBestSeller(e.target.checked)}
+                            className="accent-foreground flex-shrink-0"
+                          />
+                          <span>Отметить как «Хит продаж» (Bestseller)</span>
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer font-medium">
@@ -1242,7 +1579,7 @@ export default function AdminPage() {
                 <form onSubmit={handleAddCategory} className="flex gap-3">
                   <input
                     type="text"
-                    placeholder="Название категории, напр. «Брюки»"
+                    placeholder="Название категории, напр. «Костюмы и комплекты»"
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
                     className="flex-1 px-4 py-2.5 text-xs border border-border rounded-xl bg-background focus:outline-none focus:border-foreground"
@@ -1263,7 +1600,7 @@ export default function AdminPage() {
               <div className="border border-border rounded-2xl bg-card overflow-hidden">
                 {categoriesList.length === 0 ? (
                   <div className="p-10 text-center text-sm text-muted-foreground">
-                    Категории загружаются... Если список пуст, нажмите &laquo;Добавить&raquo; выше.
+                    Категории загружаются... Если список пуст, нажмите «Добавить» выше.
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs">
@@ -1347,20 +1684,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {statusMessage && (
-            <div className="mb-6 p-3.5 rounded-xl bg-foreground text-background text-xs font-medium flex items-center justify-between gap-3">
-              <span>{statusMessage}</span>
-              <button
-                type="button"
-                onClick={() => setStatusMessage(null)}
-                className="text-[11px] opacity-75 hover:opacity-100"
-              >
-                Закрыть
-              </button>
-            </div>
-          )}
-
-          {/* TAB 3: Orders */}
+          {/* TAB 4: Orders */}
           {currentTab === "orders" && (
             <div className="space-y-6">
               <div>
@@ -1389,9 +1713,13 @@ export default function AdminPage() {
                           <td className="p-4 font-mono font-bold whitespace-nowrap">{ord.number}</td>
                           <td className="p-4 min-w-[160px]">
                             <p className="font-semibold">{ord.customer}</p>
-                            <span className="text-[11px] text-muted-foreground whitespace-nowrap">{ord.phone}</span>
+                            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                              {ord.phone}
+                            </span>
                           </td>
-                          <td className="p-4 font-bold whitespace-nowrap tabular-nums">{formatPrice(ord.total)}</td>
+                          <td className="p-4 font-bold whitespace-nowrap tabular-nums">
+                            {formatPrice(ord.total)}
+                          </td>
                           <td className="p-4 whitespace-nowrap">{ord.payment}</td>
                           <td className="p-4 whitespace-nowrap">
                             <input
@@ -1435,14 +1763,27 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* TAB 4: Customers */}
+          {/* TAB 5: Customers */}
           {currentTab === "customers" && (
             <div className="space-y-6">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">База клиентов SABYR</h1>
-                <p className="text-xs text-muted-foreground">
-                  Профили покупателей, бонусные балансы, SABYR CLUB и блокировка доступа
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">База клиентов и права доступа</h1>
+                  <p className="text-xs text-muted-foreground">
+                    Начисляйте или списывайте бонусы, выдавайте SABYR CLUB VIP, назначайте администраторов и управляйте доступом
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative max-w-md">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Поиск по имени, телефону или email..."
+                  value={searchCustomer}
+                  onChange={(e) => setSearchCustomer(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 text-xs border border-border rounded-xl bg-card focus:outline-none focus:border-foreground"
+                />
               </div>
 
               <div className="border border-border rounded-2xl bg-card overflow-hidden">
@@ -1451,31 +1792,47 @@ export default function AdminPage() {
                     <thead className="bg-secondary/40 border-b border-border text-muted-foreground uppercase text-[10px] tracking-wider">
                       <tr>
                         <th className="p-4">Клиент</th>
-                        <th className="p-4">Статус</th>
+                        <th className="p-4">Роль и Статус</th>
                         <th className="p-4">Уровень</th>
                         <th className="p-4">Бонусы</th>
                         <th className="p-4">Покупки</th>
                         <th className="p-4">SABYR CLUB</th>
-                        <th className="p-4 text-right">Управление</th>
+                        <th className="p-4 text-right">Полное управление</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {customersList.map((c) => (
+                      {filteredCustomers.map((c) => (
                         <tr key={c.id} className="hover:bg-secondary/20">
                           <td className="p-4 min-w-[180px]">
                             <p className="font-semibold">{c.name}</p>
                             <span className="text-[11px] text-muted-foreground block">{c.phone}</span>
-                          </td>
-                          <td className="p-4 whitespace-nowrap">
-                            {c.isBlocked ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400 text-[10px] font-bold">
-                                Заблокирован
-                              </span>
-                            ) : (
-                              <span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400 text-[10px] font-bold">
-                                Активен
+                            {c.email && c.email !== "—" && (
+                              <span className="text-[10px] text-muted-foreground block">
+                                {c.email}
                               </span>
                             )}
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            <div className="flex flex-col gap-1 items-start">
+                              {c.role === "ADMIN" ? (
+                                <span className="px-2 py-0.5 rounded bg-foreground text-background text-[10px] font-bold">
+                                  ADMIN
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded bg-secondary text-muted-foreground text-[10px] font-medium">
+                                  Клиент
+                                </span>
+                              )}
+                              {c.isBlocked ? (
+                                <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400 text-[10px] font-bold">
+                                  Заблокирован
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400 text-[10px] font-bold">
+                                  Активен
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="p-4 whitespace-nowrap font-medium">{c.level}</td>
                           <td className="p-4 whitespace-nowrap font-bold tabular-nums">
@@ -1494,30 +1851,45 @@ export default function AdminPage() {
                             )}
                           </td>
                           <td className="p-4 text-right whitespace-nowrap">
-                            <div className="inline-flex items-center gap-2">
+                            <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleCustomerAction(c.id, { bonusDelta: 5000 })
-                                }
-                                className="px-2.5 py-1 rounded-lg border border-border hover:bg-secondary text-[11px] font-medium"
+                                onClick={() => handleCustomerAction(c.id, { bonusDelta: 5000 })}
+                                className="px-2 py-1 rounded-lg border border-border hover:bg-secondary text-[11px] font-medium"
+                                title="Начислить 5 000 бонусов"
                               >
                                 +5 000 Б
                               </button>
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleCustomerAction(c.id, { toggleClub: true })
-                                }
-                                className="px-2.5 py-1 rounded-lg border border-border hover:bg-secondary text-[11px] font-medium"
+                                onClick={() => handleCustomerAction(c.id, { bonusDelta: -5000 })}
+                                className="px-2 py-1 rounded-lg border border-border hover:bg-secondary text-[11px] font-medium text-muted-foreground"
+                                title="Списать 5 000 бонусов"
                               >
-                                {c.club ? "Откл. Club" : "Вкл. Club"}
+                                -5 000 Б
                               </button>
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleCustomerAction(c.id, { toggleBlock: true })
-                                }
+                                onClick={() => handleCustomerAction(c.id, { toggleClub: true })}
+                                className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+                                  c.club
+                                    ? "bg-black text-[hsl(var(--accent))] border-black"
+                                    : "border-border hover:bg-secondary"
+                                }`}
+                              >
+                                {c.club ? "Откл. Club" : "Выдать Club"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCustomerAction(c.id, { toggleRole: true })}
+                                className="px-2.5 py-1 rounded-lg border border-border hover:bg-secondary text-[11px] font-medium"
+                                title="Переключить роль ADMIN / CUSTOMER"
+                              >
+                                {c.role === "ADMIN" ? "Снять админа" : "Сделать админом"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCustomerAction(c.id, { toggleBlock: true })}
                                 className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
                                   c.isBlocked
                                     ? "border-green-600/40 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/50"
@@ -1537,28 +1909,89 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* TAB 5: Bonuses */}
+          {/* TAB 6: Bonuses */}
           {currentTab === "bonuses" && (
             <div className="space-y-6">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Настройки Бонусной Программы</h1>
-                <p className="text-xs text-muted-foreground">
-                  Управление уровнями лояльности и процентами начисления (1 бонус = 1 ₸, оплата до 30% заказа)
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">Настройки Бонусной Программы</h1>
+                  <p className="text-xs text-muted-foreground">
+                    Редактируйте пороги покупок и процент кешбэка для каждого уровня лояльности (1 бонус = 1 ₸)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveBonusLevels}
+                  disabled={savingBonuses}
+                  className="px-6 py-2.5 bg-foreground text-background text-xs font-semibold rounded-full hover:opacity-90 disabled:opacity-50"
+                >
+                  {savingBonuses ? "Сохранение..." : "Сохранить уровни бонусов"}
+                </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {bonusLevels.map((bl, i) => (
-                  <div key={i} className="p-6 border border-border rounded-2xl bg-card space-y-3">
+                  <div key={i} className="p-6 border border-border rounded-2xl bg-card space-y-4 text-xs">
                     <div className="flex justify-between items-center gap-2">
-                      <h3 className="font-bold text-sm">{bl.level}</h3>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Уровень #{i + 1}
+                      </span>
                       <span className="px-3 py-1 bg-secondary rounded-full font-bold text-xs text-[hsl(var(--accent))] flex-shrink-0 tabular-nums">
                         {bl.percent}% кешбэк
                       </span>
                     </div>
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      <p className="tabular-nums">Порог покупок: от {formatPrice(bl.minSpend)}</p>
-                      <p className="tabular-nums">Активных клиентов: {bl.activeUsers} чел.</p>
+
+                    <div>
+                      <label className="block font-semibold mb-1">Название уровня</label>
+                      <input
+                        type="text"
+                        value={bl.name}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setBonusLevels((prev) =>
+                            prev.map((item, idx) => (idx === i ? { ...item, name: val } : item))
+                          );
+                        }}
+                        className="w-full px-3.5 py-2 border border-border rounded-lg bg-background font-semibold"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold mb-1">Порог покупок (в ₸)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={bl.minSpend}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setBonusLevels((prev) =>
+                              prev.map((item, idx) =>
+                                idx === i ? { ...item, minSpend: val } : item
+                              )
+                            );
+                          }}
+                          className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold mb-1">Кешбэк (%)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={bl.percent}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setBonusLevels((prev) =>
+                              prev.map((item, idx) =>
+                                idx === i ? { ...item, percent: val } : item
+                              )
+                            );
+                          }}
+                          className="w-full px-3.5 py-2 border border-border rounded-lg bg-background font-bold"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1566,50 +1999,267 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* TAB 6: SABYR CLUB Admin */}
+          {/* TAB 7: SABYR CLUB & AI Control */}
           {currentTab === "club" && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Управление SABYR CLUB</h1>
-                <p className="text-xs text-muted-foreground">
-                  Настройка клубных условий и доступ к закрытым мероприятиям
-                </p>
-              </div>
-
-              <div className="p-6 border border-border rounded-2xl bg-card space-y-4">
-                <h3 className="font-bold text-sm">Параметры членства</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="block font-medium mb-1">Стоимость годового членства</label>
-                    <input
-                      type="text"
-                      value={clubAnnualPrice}
-                      onChange={(e) => setClubAnnualPrice(e.target.value)}
-                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-medium mb-1">Приветственный депозит сертификата</label>
-                    <input
-                      type="text"
-                      value={clubWelcomeDeposit}
-                      onChange={(e) => setClubWelcomeDeposit(e.target.value)}
-                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
-                    />
-                  </div>
+            <div className="space-y-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">
+                    Управление SABYR CLUB и AI-сервисами
+                  </h1>
+                  <p className="text-xs text-muted-foreground">
+                    Меняйте цену закрытого клуба, управляйте доступом к AI-Стилисту и AI-Примерочной, назначайте резидентов и клубные дропы
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleSaveClubSettings}
-                  className="px-5 py-2 bg-foreground text-background text-xs font-semibold rounded-full hover:opacity-90"
+                  disabled={savingClub}
+                  className="px-6 py-2.5 bg-foreground text-background text-xs font-semibold rounded-full hover:opacity-90 disabled:opacity-50 self-start sm:self-auto"
                 >
-                  Обновить условия клуба
+                  {savingClub ? "Сохранение..." : "Сохранить цены и настройки клуба"}
                 </button>
+              </div>
+
+              {/* AI Access Lock & Pricing Card */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-7 p-6 border border-border rounded-2xl bg-card space-y-5 text-xs">
+                  <div className="flex items-center justify-between border-b border-border pb-3">
+                    <h3 className="font-bold text-sm flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-[hsl(var(--accent))]" />
+                      <span>Тарифы и привилегии SABYR CLUB</span>
+                    </h3>
+                    <span className="text-[11px] text-muted-foreground">
+                      Обновляется на /club, главной и экранах AI
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-semibold mb-1">
+                        Годовая подписка SABYR CLUB (цена)
+                      </label>
+                      <input
+                        type="text"
+                        value={clubAnnualPrice}
+                        onChange={(e) => setClubAnnualPrice(e.target.value)}
+                        placeholder="99 000 ₸"
+                        className="w-full px-3.5 py-2.5 border border-border rounded-lg bg-background font-bold text-sm"
+                      />
+                      <span className="text-[10px] text-muted-foreground mt-1 block">
+                        Отображается в годовом тарифе на странице /club
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold mb-1">
+                        Месячная подписка SABYR CLUB (цена)
+                      </label>
+                      <input
+                        type="text"
+                        value={clubMonthlyPrice}
+                        onChange={(e) => setClubMonthlyPrice(e.target.value)}
+                        placeholder="12 000 ₸"
+                        className="w-full px-3.5 py-2.5 border border-border rounded-lg bg-background font-bold text-sm"
+                      />
+                      <span className="text-[10px] text-muted-foreground mt-1 block">
+                        Отображается в месячном тарифе на /club и AI-экранах
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold mb-1">
+                        Приветственный депозит / сертификат
+                      </label>
+                      <input
+                        type="text"
+                        value={clubWelcomeDeposit}
+                        onChange={(e) => setClubWelcomeDeposit(e.target.value)}
+                        placeholder="25 000 ₸"
+                        className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold mb-1">
+                        Повышенный кешбэк для клуба (%)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={clubCashbackPercent}
+                        onChange={(e) => setClubCashbackPercent(e.target.value)}
+                        className="w-full px-3.5 py-2 border border-border rounded-lg bg-background font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1">
+                      Описание привилегий на странице SABYR CLUB
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={clubSubtitle}
+                      onChange={(e) => setClubSubtitle(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* AI Features Access Control */}
+                <div className="lg:col-span-5 p-6 border border-border rounded-2xl bg-card space-y-5 text-xs flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-border pb-3">
+                      <h3 className="font-bold text-sm flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-[hsl(var(--accent))]" />
+                        <span>Доступ к AI-функциям сайта</span>
+                      </h3>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          aiClubOnly
+                            ? "bg-black text-[hsl(var(--accent))]"
+                            : "bg-green-50 text-green-700"
+                        }`}
+                      >
+                        {aiClubOnly ? "ТОЛЬКО SABYR CLUB" : "ОТКРЫТО ВСЕМ"}
+                      </span>
+                    </div>
+
+                    <p className="text-muted-foreground leading-relaxed">
+                      Управляйте режимом доступа к <strong>AI-Стилисту (/ai-stylist)</strong> и{" "}
+                      <strong>AI-Примерочной (/ai-tryon)</strong>. Когда включён закрытый режим,
+                      пользователи без подписки SABYR CLUB видят приглашение вступить в клуб с
+                      актуальными тарифами ({clubMonthlyPrice} / мес или {clubAnnualPrice} / год), а
+                      серверные API-маршруты блокируют запросы без членства.
+                    </p>
+
+                    <label className="p-4 rounded-xl border border-border bg-secondary/40 flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={aiClubOnly}
+                        onChange={(e) => setAiClubOnly(e.target.checked)}
+                        className="mt-0.5 accent-foreground w-4 h-4 flex-shrink-0"
+                      />
+                      <div>
+                        <span className="font-bold block text-foreground">
+                          AI-Стилист и AI-Примерочная доступны только с закрытым клубом SABYR CLUB
+                        </span>
+                        <span className="text-[11px] text-muted-foreground block mt-0.5">
+                          Администраторы и резиденты со статусом CLUB VIP получают полный доступ автоматически.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveClubSettings}
+                    disabled={savingClub}
+                    className="w-full py-3 bg-foreground text-background font-semibold rounded-full hover:opacity-90 disabled:opacity-50"
+                  >
+                    {savingClub ? "Сохранение..." : "Применить и сохранить настройки клуба"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Management: Club Members & Club-Only Products */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Club Members Quick Control */}
+                <div className="p-6 border border-border rounded-2xl bg-card space-y-4 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm">Резиденты SABYR CLUB ({clubMembersCount})</h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        Быстрая выдача или отзыв клубного доступа (открывает AI и закрытые дропы)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-border max-h-80 overflow-y-auto">
+                    {customersList.map((c) => (
+                      <div key={c.id} className="py-2.5 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate">{c.name}</p>
+                          <span className="text-[11px] text-muted-foreground">{c.phone}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {c.club && (
+                            <span className="px-2 py-0.5 rounded bg-black text-[hsl(var(--accent))] text-[10px] font-bold">
+                              CLUB VIP
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleCustomerAction(c.id, { toggleClub: true })}
+                            className={`px-3 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+                              c.club
+                                ? "border-border text-muted-foreground hover:bg-secondary"
+                                : "bg-foreground text-background border-foreground hover:opacity-90"
+                            }`}
+                          >
+                            {c.club ? "Отозвать клуб" : "Выдать клуб"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Club-Only Products Quick Control */}
+                <div className="p-6 border border-border rounded-2xl bg-card space-y-4 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm">
+                        Клубные дропы одежды ({clubProductsCount} из {productsList.length})
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        Отмечайте изделия, которые могут заказать только члены SABYR CLUB
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-border max-h-80 overflow-y-auto">
+                    {productsList.map((p) => (
+                      <div key={p.id} className="py-2.5 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative w-9 h-11 rounded bg-secondary overflow-hidden flex-shrink-0">
+                            <Image
+                              src={p.images[0] || "/products/1-1.jpg"}
+                              alt={p.name}
+                              fill
+                              unoptimized
+                              className="object-cover"
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold truncate">{p.name}</p>
+                            <span className="text-[11px] text-muted-foreground">
+                              {formatPrice(p.price)}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleProductClub(p)}
+                          className={`px-3 py-1 rounded-lg text-[11px] font-semibold flex-shrink-0 transition-colors ${
+                            p.isClubOnly
+                              ? "bg-black text-[hsl(var(--accent))]"
+                              : "border border-border hover:bg-secondary"
+                          }`}
+                        >
+                          {p.isClubOnly ? "CLUB ONLY (Активно)" : "Сделать клубным"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* TAB 7: Promos & Gift Cards */}
+          {/* TAB 8: Promos & Gift Cards */}
           {currentTab === "promos" && (
             <div className="space-y-8">
               <div className="flex justify-between items-center">
@@ -1631,7 +2281,7 @@ export default function AdminPage() {
                   <input
                     type="text"
                     required
-                    placeholder="SUMMER20"
+                    placeholder="SABYR20"
                     value={newPromoCode}
                     onChange={(e) => setNewPromoCode(e.target.value)}
                     className="px-3.5 py-2 border border-border rounded-lg bg-background uppercase font-mono"
@@ -1748,7 +2398,9 @@ export default function AdminPage() {
                         {giftCardsList.map((gc) => (
                           <tr key={gc.id}>
                             <td className="p-4 font-bold whitespace-nowrap">{gc.code}</td>
-                            <td className="p-4 whitespace-nowrap tabular-nums">{formatPrice(gc.amount)}</td>
+                            <td className="p-4 whitespace-nowrap tabular-nums">
+                              {formatPrice(gc.amount)}
+                            </td>
                             <td className="p-4 whitespace-nowrap font-bold tabular-nums">
                               {formatPrice(gc.balance)}
                             </td>
@@ -1776,17 +2428,89 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* TAB 8: Content & Banners */}
+          {/* TAB 9: Content, Banners, Delivery & Contacts */}
           {currentTab === "content" && (
             <div className="space-y-6">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Контент главной страницы</h1>
-                <p className="text-xs text-muted-foreground">
-                  Редактирование главного баннера и текстов без кода
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">
+                    Управление сайтом: Главная, Доставка, Контакты
+                  </h1>
+                  <p className="text-xs text-muted-foreground">
+                    Полное редактирование баннеров, верхней строки объявлений, условий доставки и контактов без кода
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveHeroContent}
+                  disabled={savingSite}
+                  className="px-6 py-2.5 bg-foreground text-background text-xs rounded-full font-semibold hover:opacity-90 disabled:opacity-50"
+                >
+                  {savingSite ? "Сохранение..." : "Сохранить все настройки сайта"}
+                </button>
               </div>
 
+              {/* Announcement Bar Settings */}
               <div className="p-6 border border-border rounded-2xl bg-card space-y-4 text-xs">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm">Верхняя информационная полоса (Announcement Bar)</h3>
+                  <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={announcementEnabled}
+                      onChange={(e) => setAnnouncementEnabled(e.target.checked)}
+                      className="accent-foreground"
+                    />
+                    <span>Показывать полосу сверху сайта</span>
+                  </label>
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Текст верхней полосы</label>
+                  <input
+                    type="text"
+                    value={announcementText}
+                    onChange={(e) => setAnnouncementText(e.target.value)}
+                    className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                  />
+                </div>
+              </div>
+
+              {/* Hero Banner Settings */}
+              <div className="p-6 border border-border rounded-2xl bg-card space-y-4 text-xs">
+                <h3 className="font-bold text-sm">Главный экран (Hero-баннер)</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-semibold mb-1">Надпись над заголовком (Badge)</label>
+                    <input
+                      type="text"
+                      value={heroBadge}
+                      onChange={(e) => setHeroBadge(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Фотография главного баннера</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={heroImage}
+                        onChange={(e) => setHeroImage(e.target.value)}
+                        placeholder="/products/1-1.jpg"
+                        className="flex-1 px-3.5 py-2 border border-border rounded-lg bg-background"
+                      />
+                      <label className="px-3 py-2 border border-border rounded-lg bg-secondary hover:bg-secondary/80 cursor-pointer inline-flex items-center gap-1.5 font-medium whitespace-nowrap">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Файл</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleHeroImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
                 <div>
                   <label className="block font-semibold mb-1">Главный заголовок Hero</label>
                   <input
@@ -1797,26 +2521,95 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Подзаголовок</label>
-                  <input
-                    type="text"
+                  <label className="block font-semibold mb-1">Подзаголовок Hero</label>
+                  <textarea
+                    rows={2}
                     value={heroSubtitle}
                     onChange={(e) => setHeroSubtitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-border rounded-lg bg-background"
+                    className="w-full px-3.5 py-2 border border-border rounded-lg bg-background resize-none"
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSaveHeroContent}
-                  className="px-6 py-2.5 bg-foreground text-background rounded-full font-semibold hover:opacity-90"
-                >
-                  Сохранить изменения на главной
-                </button>
+              </div>
+
+              {/* Delivery & Contacts Settings */}
+              <div className="p-6 border border-border rounded-2xl bg-card space-y-4 text-xs">
+                <h3 className="font-bold text-sm">Тарифы доставки и контакты бутика</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block font-semibold mb-1">
+                      Бесплатная доставка от суммы (в ₸)
+                    </label>
+                    <input
+                      type="number"
+                      value={freeDeliveryThreshold}
+                      onChange={(e) => setFreeDeliveryThreshold(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">
+                      Стоимость курьерской доставки (в ₸)
+                    </label>
+                    <input
+                      type="number"
+                      value={courierDeliveryCost}
+                      onChange={(e) => setCourierDeliveryCost(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Города присутствия</label>
+                    <input
+                      type="text"
+                      value={brandCity}
+                      onChange={(e) => setBrandCity(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Контактный телефон</label>
+                    <input
+                      type="text"
+                      value={contactPhone}
+                      onChange={(e) => setContactPhone(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Ссылка на WhatsApp</label>
+                    <input
+                      type="text"
+                      value={contactWhatsapp}
+                      onChange={(e) => setContactWhatsapp(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Ссылка на Instagram</label>
+                    <input
+                      type="text"
+                      value={contactInstagram}
+                      onChange={(e) => setContactInstagram(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveHeroContent}
+                    disabled={savingSite}
+                    className="px-6 py-2.5 bg-foreground text-background rounded-full font-semibold hover:opacity-90 disabled:opacity-50"
+                  >
+                    {savingSite ? "Сохранение..." : "Сохранить все настройки сайта"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-          {/* TAB 9: Notifications */}
+          {/* TAB 10: Notifications */}
           {currentTab === "notifications" && (
             <div className="space-y-6">
               <div>
@@ -1870,7 +2663,7 @@ export default function AdminPage() {
                       required
                       value={notifTitle}
                       onChange={(e) => setNotifTitle(e.target.value)}
-                      placeholder="Эксклюзивный дроп пальто из кашемира уже на сайте"
+                      placeholder="Закрытый дроп коллекции @sabyr.wear уже доступен"
                       className="w-full px-3.5 py-2 border border-border rounded-lg bg-background"
                     />
                   </div>

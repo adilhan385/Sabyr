@@ -5,29 +5,45 @@ import { getLiveCatalogProducts } from "@/lib/productsStore";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { getSession } from "@/lib/auth";
 
+import { prisma, isDatabaseAvailable } from "@/lib/db";
+
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 
 const StylistRequestSchema = z.object({
   occasion: z.string().max(100).optional(),
   style: z.string().max(100).optional(),
   palette: z.string().max(100).optional(),
-  size: z.enum(["XS", "S", "M", "L", "XL", "XXL"]).optional(),
+  size: z.enum(["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL"]).optional(),
   query: z.string().max(500).optional(),
 });
 
 // ─── POST /api/ai/stylist ─────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  let requireClub = true;
+  try {
+    if (await isDatabaseAvailable()) {
+      const setting = await prisma.clubSettings.findUnique({ where: { key: "ai_club_only" } });
+      if (setting && setting.value === "false") {
+        requireClub = false;
+      }
+    }
+  } catch {
+    // default to true
+  }
+
   // Exclusive to SABYR CLUB members and Admins
-  const session = await getSession(req);
-  if (!session || (!session.user.isClubMember && session.user.role !== "ADMIN")) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "AI-Стилист и AI-Подбор доступны только резидентам закрытого клуба SABYR CLUB.",
-      },
-      { status: 403 }
-    );
+  if (requireClub) {
+    const session = await getSession(req);
+    if (!session || (!session.user.isClubMember && session.user.role !== "ADMIN")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "AI-Стилист и AI-Подбор доступны только резидентам закрытого клуба SABYR CLUB.",
+        },
+        { status: 403 }
+      );
+    }
   }
 
   // Rate limit: 10 requests per minute per IP

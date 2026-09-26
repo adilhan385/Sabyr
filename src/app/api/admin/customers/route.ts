@@ -9,6 +9,7 @@ const UpdateCustomerSchema = z.object({
   bonusDelta: z.number().int().optional(),
   toggleClub: z.boolean().optional(),
   toggleBlock: z.boolean().optional(),
+  toggleRole: z.boolean().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -26,9 +27,6 @@ export async function GET(req: NextRequest) {
 
   try {
     const users = await prisma.user.findMany({
-      where: {
-        id: { not: "usr-01" },
-      },
       include: {
         bonusLevel: true,
         clubMembership: true,
@@ -83,13 +81,18 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Некорректные данные" }, { status: 400 });
     }
 
-    const { userId, bonusDelta, toggleClub, toggleBlock } = parsed.data;
+    const { userId, bonusDelta, toggleClub, toggleBlock, toggleRole } = parsed.data;
 
     if (typeof bonusDelta === "number" && bonusDelta !== 0) {
+      const target = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { bonusBalance: true },
+      });
+      const nextBalance = Math.max(0, (target?.bonusBalance || 0) + bonusDelta);
       await prisma.user.update({
         where: { id: userId },
         data: {
-          bonusBalance: { increment: bonusDelta },
+          bonusBalance: nextBalance,
         },
       });
       await prisma.bonusTransaction.create({
@@ -135,6 +138,19 @@ export async function PATCH(req: NextRequest) {
         await prisma.user.update({
           where: { id: userId },
           data: { isBlocked: !targetUser.isBlocked },
+        });
+      }
+    }
+
+    if (toggleRole) {
+      const targetUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      if (targetUser) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { role: targetUser.role === "ADMIN" ? "CUSTOMER" : "ADMIN" },
         });
       }
     }

@@ -13,7 +13,7 @@ const MAX_BASE64_BYTES = 5 * 1024 * 1024;
 
 const TryOnRequestSchema = z.object({
   productId: z.string().min(1, "ID товара обязателен").max(100),
-  size: z.enum(["XS", "S", "M", "L", "XL", "XXL"]).default("S"),
+  size: z.enum(["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL"]).default("S"),
   mode: z.enum(["single", "outfit"]).default("single"),
   userPhotoUrl: z.string().url().optional(),
   userPhotoBase64: z
@@ -25,16 +25,30 @@ const TryOnRequestSchema = z.object({
 // ─── POST /api/ai/tryon ───────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  let requireClub = true;
+  try {
+    if (await isDatabaseAvailable()) {
+      const setting = await prisma.clubSettings.findUnique({ where: { key: "ai_club_only" } });
+      if (setting && setting.value === "false") {
+        requireClub = false;
+      }
+    }
+  } catch {
+    // default to true
+  }
+
   // Exclusive to SABYR CLUB members and Admins
-  const session = await getSession(req);
-  if (!session || (!session.user.isClubMember && session.user.role !== "ADMIN")) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "AI-Примерочная доступна только резидентам закрытого клуба SABYR CLUB.",
-      },
-      { status: 403 }
-    );
+  if (requireClub) {
+    const session = await getSession(req);
+    if (!session || (!session.user.isClubMember && session.user.role !== "ADMIN")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "AI-Примерочная доступна только резидентам закрытого клуба SABYR CLUB.",
+        },
+        { status: 403 }
+      );
+    }
   }
 
   // Rate limit: 5 requests per minute per IP (more restrictive — AI vision is expensive)

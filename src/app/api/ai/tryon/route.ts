@@ -7,11 +7,11 @@ import { getLiveCatalogProducts } from "@/lib/productsStore";
 import { prisma, isDatabaseAvailable } from "@/lib/db";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { getSession } from "@/lib/auth";
+import { ProductItem } from "@/data/mockData";
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 
-// Max ~8MB base64 photo
-const MAX_BASE64_BYTES = 8 * 1024 * 1024;
+const MAX_BASE64_BYTES = 10 * 1024 * 1024;
 
 const TryOnRequestSchema = z.object({
   productId: z.string().min(1, "ID товара обязателен").max(100),
@@ -21,11 +21,12 @@ const TryOnRequestSchema = z.object({
   userPhotoUrl: z.string().optional(),
   userPhotoBase64: z
     .string()
-    .max(MAX_BASE64_BYTES, "Фото слишком большое (макс. 6 МБ)")
+    .max(MAX_BASE64_BYTES, "Фото слишком большое")
     .optional(),
+  skipServerVton: z.boolean().optional(),
 });
 
-function readPublicImageBase64(imageUrl?: string): { mimeType: string; data: string } | null {
+function readPublicImageBuffer(imageUrl?: string): { mimeType: string; buffer: Buffer; base64: string } | null {
   if (!imageUrl || !imageUrl.startsWith("/")) return null;
   try {
     const cleanRel = imageUrl.replace(/^\//, "");
@@ -35,7 +36,168 @@ function readPublicImageBase64(imageUrl?: string): { mimeType: string; data: str
     const ext = path.extname(fullPath).toLowerCase();
     const mimeType =
       ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
-    return { mimeType, data: buffer.toString("base64") };
+    return { mimeType, buffer, base64: buffer.toString("base64") };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Server-side call to Leffa Diffusion VTON (franciszzj-leffa.hf.space)
+ * Exact 9-parameter signature verified against Leffa app.py
+ */
+async function runServerLeffaVton(
+  personBuffer: Buffer,
+  personMime: string,
+  garmentBuffer: Buffer,
+  garmentMime: string
+): Promise<string | null> {
+  const SPACE_BASE = "https://franciszzj-leffa.hf.space";
+  try {
+    const formData = new FormData();
+    formData.append(
+      "files",
+      new Blob([new Uint8Array(personBuffer)], { type: personMime }),
+      "person.jpg"
+    );
+    formData.append(
+      "files",
+      new Blob([new Uint8Array(garmentBuffer)], { type: garmentMime }),
+      "garment.jpg"
+    );
+
+    const upRes = await fetch(`${SPACE_BASE}/gradio_api/upload`, {
+      method: "POST",
+      body: formData,
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!upRes.ok) return null;
+    const paths = (await upRes.json()) as string[];
+    if (!Array.isArray(paths) || paths.length < 2) return null;
+
+    const callRes = await fetch(`${SPACE_BASE}/gradio_api/call/leffa_predict_vt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data: [
+          { path: paths[0], meta: { _type: "gradio.FileData" } },
+          { path: paths[1], meta: { _type: "gradio.FileData" } },
+          false,
+          30,
+          2.5,
+          42,
+          "viton_hd",
+          "upper_body",
+          false,
+        ],
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!callRes.ok) return null;
+    const { event_id } = (await callRes.json()) as { event_id?: string };
+    if (!event_id) return null;
+
+    const sseRes = await fetch(`${SPACE_BASE}/gradio_api/call/leffa_predict_vt/${event_id}`, {
+      signal: AbortSignal.timeout(45000),
+    });
+    const sseText = await sseRes.text();
+    for (const line of sseText.split("\n")) {
+      if (line.startsWith("data:")) {
+        const raw = line.slice(5).trim();
+        if (!raw || raw === "null") continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const first = Array.isArray(parsed) ? parsed[0] : null;
+          if (first?.url) return first.url as string;
+          if (first?.path) return `${SPACE_BASE}/gradio_api/file=${first.path}`;
+        } catch {
+          // continue
+        }
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Server-side call to IDM-VTON (yisol-idm-vton.hf.space)
+ * Exact 7-parameter signature verified against IDM-VTON app.py
+ */
+async function runServerIdmVton(
+  personBuffer: Buffer,
+  personMime: string,
+  garmentBuffer: Buffer,
+  garmentMime: string,
+  product: ProductItem
+): Promise<string | null> {
+  const SPACE_BASE = "https://yisol-idm-vton.hf.space";
+  try {
+    const formData = new FormData();
+    formData.append(
+      "files",
+      new Blob([new Uint8Array(personBuffer)], { type: personMime }),
+      "person.jpg"
+    );
+    formData.append(
+      "files",
+      new Blob([new Uint8Array(garmentBuffer)], { type: garmentMime }),
+      "garment.jpg"
+    );
+
+    const upRes = await fetch(`${SPACE_BASE}/upload`, {
+      method: "POST",
+      body: formData,
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!upRes.ok) return null;
+    const paths = (await upRes.json()) as string[];
+    if (!Array.isArray(paths) || paths.length < 2) return null;
+
+    const callRes = await fetch(`${SPACE_BASE}/call/tryon`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data: [
+          {
+            background: { path: paths[0], meta: { _type: "gradio.FileData" } },
+            layers: [],
+            composite: null,
+          },
+          { path: paths[1], meta: { _type: "gradio.FileData" } },
+          `SABYR luxury menswear: ${product.name}`,
+          true,
+          true,
+          30,
+          42,
+        ],
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!callRes.ok) return null;
+    const { event_id } = (await callRes.json()) as { event_id?: string };
+    if (!event_id) return null;
+
+    const sseRes = await fetch(`${SPACE_BASE}/call/tryon/${event_id}`, {
+      signal: AbortSignal.timeout(45000),
+    });
+    const sseText = await sseRes.text();
+    for (const line of sseText.split("\n")) {
+      if (line.startsWith("data:")) {
+        const raw = line.slice(5).trim();
+        if (!raw || raw === "null") continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const first = Array.isArray(parsed) ? parsed[0] : null;
+          if (first?.url) return first.url as string;
+          if (first?.path) return `${SPACE_BASE}/file=${first.path}`;
+        } catch {
+          // continue
+        }
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -70,9 +232,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Rate limit: 15 requests per minute per IP so interactive fitting is responsive
+  // Rate limit: 20 requests per minute per IP
   const ip = getClientIp(req);
-  const rl = checkRateLimit("ai-tryon", ip, 15, 60_000);
+  const rl = checkRateLimit("ai-tryon", ip, 20, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       {
@@ -102,7 +264,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { productId, secondProductId, size, userPhotoUrl, userPhotoBase64, mode } = parsed.data;
+    const { productId, secondProductId, size, userPhotoUrl, userPhotoBase64, mode, skipServerVton } =
+      parsed.data;
 
     const products = await getLiveCatalogProducts();
     const product = products.find((p) => p.id === productId);
@@ -135,7 +298,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let userImagePart: { mimeType: string; data: string } | null = null;
+    let userImagePart: { mimeType: string; data: string; buffer: Buffer } | null = null;
     if (userPhotoBase64 && typeof userPhotoBase64 === "string") {
       const match = userPhotoBase64.match(/^data:([^;]+);base64,(.+)$/);
       if (match) {
@@ -146,75 +309,91 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
         }
-        userImagePart = { mimeType, data: match[2] };
+        userImagePart = {
+          mimeType,
+          data: match[2],
+          buffer: Buffer.from(match[2], "base64"),
+        };
       }
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
     let generatedImageBase64: string | null = null;
+    const productImg = readPublicImageBuffer(product.images?.[0]);
 
-    if (apiKey) {
-      const ai = new GoogleGenAI({ apiKey });
+    // 1. If client requested server-side VTON backup, run Leffa / IDM-VTON / Gemini Image
+    if (userImagePart && !skipServerVton && productImg) {
+      // Try Leffa or IDM-VTON on server first
+      const vtonUrl =
+        (await runServerIdmVton(
+          userImagePart.buffer,
+          userImagePart.mimeType,
+          productImg.buffer,
+          productImg.mimeType,
+          product
+        )) ||
+        (await runServerLeffaVton(
+          userImagePart.buffer,
+          userImagePart.mimeType,
+          productImg.buffer,
+          productImg.mimeType
+        ));
 
-      // 1. Try photorealistic Virtual Try-On image generation if user photo is provided
-      if (userImagePart) {
-        try {
-          const imageModel = process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image";
-          const productImg = readPublicImageBase64(product.images?.[0]);
-          const secondImg = secondProduct ? readPublicImageBase64(secondProduct.images?.[0]) : null;
+      if (vtonUrl) {
+        generatedImageBase64 = vtonUrl;
+      } else if (apiKey) {
+        const ai = new GoogleGenAI({ apiKey });
+        const candidateModels = [
+          process.env.GEMINI_IMAGE_MODEL,
+          "gemini-2.5-flash-image",
+          "gemini-2.0-flash-exp-image-generation",
+        ].filter(Boolean) as string[];
 
-          const vtonPrompt = `Virtual Try-On task for luxury menswear brand SABYR:
-Take the person from the FIRST image (user photo) and dress them in the exact garment shown in the SECOND image: "${product.name}" (${product.description || product.category})${
-            secondProduct
-              ? ` layered with "${secondProduct.name}" (${secondProduct.description || secondProduct.category})`
-              : ""
-          }.
-CRITICAL RULES:
-- Keep the person's face, head, hairstyle, skin tone, hands, pose, and background 100% identical to the first image.
-- Replace their existing clothing with the SABYR garment in size ${size}, matching the exact fabric texture, color, collar/lapels, and relaxed tailored silhouette from the reference garment photo.
-- Output a photorealistic high-resolution image of the person wearing the SABYR outfit.`;
+        for (const imageModel of candidateModels) {
+          try {
+            const vtonPrompt = `Virtual Try-On task for luxury menswear brand SABYR:
+Take the person from the FIRST image (user photo) and dress them in the exact garment shown in the SECOND image: "${product.name}" (${product.description || product.category}).
+Keep the person's face, head, hairstyle, skin tone, hands, pose, and background 100% identical to the first image.
+Replace their existing clothing with the SABYR garment in size ${size}, matching the exact fabric texture, color, collar/lapels, and relaxed tailored silhouette from the reference garment photo.`;
 
-          const imageContents: Array<string | { inlineData: { data: string; mimeType: string } }> = [
-            vtonPrompt,
-            { inlineData: userImagePart },
-          ];
-          if (productImg) {
-            imageContents.push({ inlineData: productImg });
-          }
-          if (secondImg) {
-            imageContents.push({ inlineData: secondImg });
-          }
+            const imgResp = await ai.models.generateContent({
+              model: imageModel,
+              contents: [
+                vtonPrompt,
+                { inlineData: { mimeType: userImagePart.mimeType, data: userImagePart.data } },
+                { inlineData: { mimeType: productImg.mimeType, data: productImg.base64 } },
+              ],
+            });
 
-          const imgResp = await ai.models.generateContent({
-            model: imageModel,
-            contents: imageContents,
-          });
-
-          const parts = imgResp.candidates?.[0]?.content?.parts || [];
-          for (const part of parts) {
-            if (part.inlineData?.data && part.inlineData?.mimeType) {
-              generatedImageBase64 = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-              break;
+            const parts = imgResp.candidates?.[0]?.content?.parts || [];
+            for (const part of parts) {
+              if (part.inlineData?.data && part.inlineData?.mimeType) {
+                generatedImageBase64 = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                break;
+              }
             }
+            if (generatedImageBase64) break;
+          } catch {
+            // try next model
           }
-        } catch (vtonErr) {
-          console.warn("[SABYR TryOn] Gemini image generation skipped or unavailable, using interactive garment compositor:", vtonErr);
         }
       }
+    }
 
-      // 2. Analyze body landmarks & fit via multimodal Gemini Flash
+    // 2. Analyze fit via multimodal Gemini Flash
+    if (apiKey) {
       try {
+        const ai = new GoogleGenAI({ apiKey });
         const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
         const promptText = `
 Вы — персональный куратор силуэта и система компьютерного зрения казахстанского бренда мужской одежды SABYR.
-Клиент примеряет изделие на своё фото:
+Клиент примерил изделие с помощью нейросети Virtual Try-On:
 Основное изделие: "${product.name}" (${product.category}, ${product.composition || "Премиальная ткань"})
 ${secondProduct ? `Второй слой в образе: "${secondProduct.name}" (${secondProduct.category})` : ""}
 Выбранный размер: "${size}"
-Режим примерки: "${mode === "outfit" ? "Капсульный образ" : "Одиночное изделие"}"
 
-Проанализируйте фото человека (координаты его плеч, шеи и торса в процентах от кадра для точного наложения 3D-лекала одежды) и посадку изделия.
+Проанализируйте посадку изделия на фигуре клиента.
 Верните ответ СТРОГО в формате JSON без markdown-разметки:
 {
   "fitScore": 98,
@@ -223,20 +402,17 @@ ${secondProduct ? `Второй слой в образе: "${secondProduct.name}
   "drape": "Естественная струящаяся драпировка без излишнего натяжения",
   "fabricFeel": "${product.composition || "Плотная структурированная фактура"}",
   "recommendation": "Размер ${size} садится с идеальным балансом между четкостью плечевого пояса и комфортом.",
-  "stylingAdvice": "Отлично сочетается с базовым поло или классической рубашкой SABYR.",
-  "bodyAnchor": {
-    "centerXPercent": 50,
-    "neckYPercent": 26,
-    "shoulderWidthPercent": 46,
-    "torsoHeightPercent": 54,
-    "hipYPercent": 62
-  }
+  "stylingAdvice": "Отлично сочетается с базовым поло или классической рубашкой SABYR."
 }
 `;
 
-        const contents: Array<string | { inlineData: { data: string; mimeType: string } }> = [promptText];
+        const contents: Array<string | { inlineData: { data: string; mimeType: string } }> = [
+          promptText,
+        ];
         if (userImagePart) {
-          contents.push({ inlineData: userImagePart });
+          contents.push({
+            inlineData: { mimeType: userImagePart.mimeType, data: userImagePart.data },
+          });
         }
 
         const response = await ai.models.generateContent({
@@ -253,21 +429,15 @@ ${secondProduct ? `Второй слой в образе: "${secondProduct.name}
 
         return NextResponse.json({
           success: true,
-          source: generatedImageBase64 ? "gemini-vton-image" : "gemini-ai",
+          source: generatedImageBase64 ? "neural-vton" : "gemini-ai",
           generatedImageBase64,
-          bodyAnchor: {
-            centerXPercent: Number(geminiParsed.bodyAnchor?.centerXPercent) || 50,
-            neckYPercent: Number(geminiParsed.bodyAnchor?.neckYPercent) || 26,
-            shoulderWidthPercent: Number(geminiParsed.bodyAnchor?.shoulderWidthPercent) || 46,
-            torsoHeightPercent: Number(geminiParsed.bodyAnchor?.torsoHeightPercent) || 54,
-            hipYPercent: Number(geminiParsed.bodyAnchor?.hipYPercent) || 62,
-          },
           fitAnalysis: {
             fitScore: geminiParsed.fitScore || 98,
             verdict: geminiParsed.verdict || "Превосходная посадка по вашим пропорциям",
             shoulders: geminiParsed.shoulders || "Линия плеча точно выверена по вашей фигуре",
             drape: geminiParsed.drape || "Архитектурная драпировка без заломов",
-            fabricFeel: geminiParsed.fabricFeel || (product.composition || "Премиальный материал SABYR"),
+            fabricFeel:
+              geminiParsed.fabricFeel || (product.composition || "Премиальный материал SABYR"),
             recommendation:
               geminiParsed.recommendation ||
               `Размер ${size} идеально подчеркивает пропорции вашего силуэта.`,
@@ -283,18 +453,10 @@ ${secondProduct ? `Второй слой в образе: "${secondProduct.name}
       }
     }
 
-    // Curated fashion & body-anchor engine fallback
     return NextResponse.json({
       success: true,
-      source: "sabyr-curated-engine",
-      generatedImageBase64: null,
-      bodyAnchor: {
-        centerXPercent: 50,
-        neckYPercent: 26,
-        shoulderWidthPercent: 46,
-        torsoHeightPercent: 54,
-        hipYPercent: 62,
-      },
+      source: generatedImageBase64 ? "neural-vton" : "sabyr-curated-engine",
+      generatedImageBase64,
       fitAnalysis: {
         fitScore: 98,
         verdict: "Безупречная посадка по вашей фигуре",
@@ -304,7 +466,7 @@ ${secondProduct ? `Второй слой в образе: "${secondProduct.name}
         recommendation: `Размер ${size} садится точно по фигуре (true to size) с сохранением фирменного силуэта SABYR.`,
         stylingAdvice: secondProduct
           ? `Образ «${product.name} + ${secondProduct.name}» создаёт завершённую многослойную капсулу.`
-          : "Для многослойного образа переключитесь в режим «Полный образ» и добавьте базовое поло или рубашку.",
+          : "ИИ автоматически адаптировал крой изделия под ваши пропорции.",
       },
       product,
       secondProduct,

@@ -378,7 +378,9 @@ export async function loginWithPhone(
     };
   }
 
-  const isAdminPhone = phone === "+7 (777) 000-00-00";
+  const isAdminAccount =
+    phone === "+7 (777) 000-00-00" ||
+    email?.trim().toLowerCase() === "adilhananuar426@gmail.com";
   const pwdHash = password?.trim() ? hashPassword(password.trim()) : undefined;
   if (pwdHash) {
     memoryPasswords.set(phone, pwdHash);
@@ -417,9 +419,9 @@ export async function loginWithPhone(
         dbUser = await prisma.user.create({
           data: {
             phone,
-            name: name?.trim() || (isAdminPhone ? "Администратор SABYR" : "Клиент SABYR"),
+            name: name?.trim() || (isAdminAccount ? "Администратор SABYR" : "Клиент SABYR"),
             email: safeEmailToSet,
-            role: isAdminPhone ? "ADMIN" : "CUSTOMER",
+            role: isAdminAccount ? "ADMIN" : "CUSTOMER",
             bonusBalance: 3000, // Welcome bonus 3000 KZT
             bonusLevelId: "bl-1",
             bonusHistory: {
@@ -432,13 +434,13 @@ export async function loginWithPhone(
           },
           include: { bonusLevel: true, clubMembership: true },
         });
-      } else if (name?.trim() || safeEmailToSet || (isAdminPhone && dbUser.role !== "ADMIN")) {
+      } else if (name?.trim() || safeEmailToSet || (isAdminAccount && dbUser.role !== "ADMIN")) {
         dbUser = await prisma.user.update({
           where: { id: dbUser.id },
           data: {
             ...(name?.trim() ? { name: name.trim() } : {}),
             ...(safeEmailToSet ? { email: safeEmailToSet } : {}),
-            ...(isAdminPhone ? { role: "ADMIN" } : {}),
+            ...(isAdminAccount ? { role: "ADMIN" } : {}),
           },
           include: { bonusLevel: true, clubMembership: true },
         });
@@ -494,14 +496,14 @@ export async function loginWithPhone(
 
   // Fallback when DB is offline or wrong DATABASE_URL is configured
   const fallbackUser: AuthUser = {
-    id: isAdminPhone ? "usr-admin-01" : `usr-${phone.replace(/\D/g, "")}`,
-    name: name?.trim() || (isAdminPhone ? "Администратор SABYR" : "Клиент SABYR"),
+    id: isAdminAccount ? "usr-admin-01" : `usr-${phone.replace(/\D/g, "")}`,
+    name: name?.trim() || (isAdminAccount ? "Администратор SABYR" : "Клиент SABYR"),
     phone,
-    email: email?.trim() || (isAdminPhone ? "admin@sabyr.kz" : undefined),
-    role: isAdminPhone ? "ADMIN" : "CUSTOMER",
+    email: email?.trim() || (isAdminAccount ? "adilhananuar426@gmail.com" : undefined),
+    role: isAdminAccount ? "ADMIN" : "CUSTOMER",
     bonusBalance: 3000,
     bonusLevel: "Новый клиент",
-    isClubMember: isAdminPhone,
+    isClubMember: isAdminAccount,
   };
 
   const token = await signSessionToken({
@@ -537,14 +539,12 @@ export async function loginWithPassword(
   const envAdminPwd = process.env.ADMIN_PASSWORD?.trim();
 
   const isAdminIdentifier =
-    normalizedPhone === "+7 (777) 000-00-00" ||
-    normalizedEmail === "admin@sabyr.kz" ||
+    normalizedEmail === "adilhananuar426@gmail.com" ||
     Boolean(envAdminEmail && normalizedEmail === envAdminEmail);
 
   const isDefaultAdminPwd =
     isAdminIdentifier &&
-    (password.trim() === "admin123" ||
-      password.trim() === "sabyr2026" ||
+    (password.trim() === "Lolkek4ik667" ||
       Boolean(envAdminPwd && password.trim() === envAdminPwd));
 
   const dbUp = await isDatabaseAvailable();
@@ -568,7 +568,7 @@ export async function loginWithPassword(
         dbUser = await prisma.user.create({
           data: {
             phone: normalizedPhone || "+7 (777) 000-00-00",
-            email: normalizedEmail || "admin@sabyr.kz",
+            email: normalizedEmail || "adilhananuar426@gmail.com",
             name: "Администратор SABYR",
             role: "ADMIN",
             bonusBalance: 50000,
@@ -605,15 +605,42 @@ export async function loginWithPassword(
         (dbUser.phone ? memoryPasswords.get(dbUser.phone) : undefined) ||
         (dbUser.email ? memoryPasswords.get(dbUser.email.toLowerCase()) : undefined);
 
-      if (storedHash) {
-        if (storedHash !== pwdHash && !isDefaultAdminPwd) {
+      if (isAdminIdentifier) {
+        if (!isDefaultAdminPwd && storedHash !== pwdHash) {
+          return {
+            success: false,
+            error: "Неверный пароль администратора",
+          };
+        }
+        try {
+          await prisma.account.upsert({
+            where: {
+              provider_providerAccountId: {
+                provider: "credentials",
+                providerAccountId: dbUser.id,
+              },
+            },
+            update: { access_token: pwdHash },
+            create: {
+              userId: dbUser.id,
+              type: "credentials",
+              provider: "credentials",
+              providerAccountId: dbUser.id,
+              access_token: pwdHash,
+            },
+          });
+        } catch {
+          // ignore
+        }
+      } else if (storedHash) {
+        if (storedHash !== pwdHash) {
           return {
             success: false,
             error: "Неверный пароль",
           };
         }
       } else {
-        if ((isAdminIdentifier || dbUser.role === "ADMIN") && !isDefaultAdminPwd) {
+        if (dbUser.role === "ADMIN" && !isDefaultAdminPwd) {
           return {
             success: false,
             error: "Неверный пароль администратора",
@@ -692,7 +719,7 @@ export async function loginWithPassword(
       : `usr-${(normalizedPhone || normalizedEmail || "guest").replace(/[^a-zA-Z0-9]/g, "")}`,
     name: isAdminIdentifier ? "Администратор SABYR" : "Клиент SABYR",
     phone: normalizedPhone || (isAdminIdentifier ? "+7 (777) 000-00-00" : undefined),
-    email: normalizedEmail || (isAdminIdentifier ? "admin@sabyr.kz" : undefined),
+    email: normalizedEmail || (isAdminIdentifier ? "adilhananuar426@gmail.com" : undefined),
     role: isAdminIdentifier ? "ADMIN" : "CUSTOMER",
     bonusBalance: 3000,
     bonusLevel: "Новый клиент",

@@ -1006,7 +1006,7 @@ export default function AdminPage() {
                 required
                 value={adminLoginId}
                 onChange={(e) => setAdminLoginId(e.target.value)}
-                placeholder="admin@sabyr.kz"
+                placeholder="adilhananuar426@gmail.com"
                 className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
               />
             </div>

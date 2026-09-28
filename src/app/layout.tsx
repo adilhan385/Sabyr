@@ -55,10 +55,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/sabyr-avatar.png", type: "image/png" },
+      { url: "/favicon.ico?v=2", sizes: "any" },
+      { url: "/icon.svg?v=2", type: "image/svg+xml" },
+      { url: "/sabyr-avatar.png?v=2", type: "image/png", sizes: "187x187" },
     ],
-    apple: "/apple-touch-icon.png",
+    shortcut: ["/favicon.ico?v=2"],
+    apple: [{ url: "/apple-touch-icon.png?v=2", sizes: "187x187", type: "image/png" }],
   },
 };
 

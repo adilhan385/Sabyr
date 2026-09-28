@@ -30,7 +30,16 @@ export function sanitizeDatabaseUrl(rawInput?: string): string | null {
 }
 
 export function getEffectiveDatabaseUrl(): string {
-  return sanitizeDatabaseUrl(process.env.DATABASE_URL) || CLOUD_FALLBACK_DATABASE_URL;
+  const cleaned = sanitizeDatabaseUrl(process.env.DATABASE_URL);
+  // Always prefer the fully migrated Sabyr1 Neon database if env is missing or points to an unmigrated instance
+  if (
+    cleaned &&
+    (cleaned.includes("ep-winter-shape-b5y1o02w") ||
+      cleaned.includes("ep-ancient-heart-a7oavhp0"))
+  ) {
+    return cleaned;
+  }
+  return CLOUD_FALLBACK_DATABASE_URL;
 }
 
 function buildPrismaClient(connectionString: string): PrismaClient {
@@ -65,24 +74,28 @@ export function getLastDbError(): string | null {
   return globalForPrisma.lastDbError ?? null;
 }
 
-// ─── DB availability check with automatic multi-endpoint failover ─────────────
+// ─── DB availability check with schema verification & multi-endpoint failover ─
 
 export async function isDatabaseAvailable(): Promise<boolean> {
   if (globalForPrisma.isConnected === true) return true;
 
+  const envCleaned = sanitizeDatabaseUrl(process.env.DATABASE_URL);
   const candidateUrls = Array.from(
-    new Set([
-      getEffectiveDatabaseUrl(),
-      CLOUD_FALLBACK_DATABASE_URL,
-      CLOUD_SECONDARY_DATABASE_URL,
-    ])
+    new Set(
+      [
+        CLOUD_FALLBACK_DATABASE_URL,
+        CLOUD_SECONDARY_DATABASE_URL,
+        envCleaned,
+      ].filter((u): u is string => Boolean(u))
+    )
   );
 
   for (let i = 0; i < candidateUrls.length; i++) {
     const url = candidateUrls[i];
     const client = i === 0 ? _activePrisma : buildPrismaClient(url);
     try {
-      await client.$queryRaw`SELECT 1`;
+      await client.$queryRaw`SELECT "isBlocked" FROM "users" LIMIT 1`;
+      await client.$queryRaw`SELECT "id" FROM "gift_cards" LIMIT 1`;
       _activePrisma = client;
       globalForPrisma.activePrisma = client;
       globalForPrisma.isConnected = true;

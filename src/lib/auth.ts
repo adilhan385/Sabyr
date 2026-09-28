@@ -83,50 +83,54 @@ export async function getSession(
       if (payload && payload.sub) {
         const dbUp = await isDatabaseAvailable();
         if (dbUp) {
-          let dbUser = await prisma.user.findUnique({
-            where: { id: payload.sub },
-            include: {
-              bonusLevel: true,
-              clubMembership: true,
-            },
-          });
-
-          if (!dbUser && (payload.email || payload.phone)) {
-            const orFilters: Array<Record<string, unknown>> = [];
-            if (payload.email) {
-              orFilters.push({ email: { equals: payload.email, mode: "insensitive" } });
-            }
-            if (payload.phone) {
-              orFilters.push({ phone: payload.phone });
-            }
-            if (orFilters.length > 0) {
-              dbUser = await prisma.user.findFirst({
-                where: { OR: orFilters },
-                include: {
-                  bonusLevel: true,
-                  clubMembership: true,
-                },
-              });
-            }
-          }
-
-          if (dbUser) {
-            if (dbUser.isBlocked) {
-              return null;
-            }
-            const isAdminEmail = dbUser.email?.toLowerCase() === "adilhananuar426@gmail.com";
-            return {
-              user: {
-                id: dbUser.id,
-                name: dbUser.name || "Клиент SABYR",
-                phone: dbUser.phone || undefined,
-                email: dbUser.email || undefined,
-                role: isAdminEmail ? "ADMIN" : dbUser.role,
-                bonusBalance: dbUser.bonusBalance,
-                bonusLevel: dbUser.bonusLevel?.name || "Новый клиент",
-                isClubMember: Boolean(dbUser.clubMembership?.isActive),
+          try {
+            let dbUser = await prisma.user.findUnique({
+              where: { id: payload.sub },
+              include: {
+                bonusLevel: true,
+                clubMembership: true,
               },
-            };
+            });
+
+            if (!dbUser && (payload.email || payload.phone)) {
+              const orFilters: Array<Record<string, unknown>> = [];
+              if (payload.email) {
+                orFilters.push({ email: { equals: payload.email, mode: "insensitive" } });
+              }
+              if (payload.phone) {
+                orFilters.push({ phone: payload.phone });
+              }
+              if (orFilters.length > 0) {
+                dbUser = await prisma.user.findFirst({
+                  where: { OR: orFilters },
+                  include: {
+                    bonusLevel: true,
+                    clubMembership: true,
+                  },
+                });
+              }
+            }
+
+            if (dbUser) {
+              if (dbUser.isBlocked) {
+                return null;
+              }
+              const isAdminEmail = dbUser.email?.toLowerCase() === "adilhananuar426@gmail.com";
+              return {
+                user: {
+                  id: dbUser.id,
+                  name: dbUser.name || "Клиент SABYR",
+                  phone: dbUser.phone || undefined,
+                  email: dbUser.email || undefined,
+                  role: isAdminEmail ? "ADMIN" : dbUser.role,
+                  bonusBalance: dbUser.bonusBalance,
+                  bonusLevel: dbUser.bonusLevel?.name || "Новый клиент",
+                  isClubMember: Boolean(dbUser.clubMembership?.isActive),
+                },
+              };
+            }
+          } catch (dbErr) {
+            console.warn("[SABYR Auth] getSession DB lookup fallback:", dbErr);
           }
         }
 

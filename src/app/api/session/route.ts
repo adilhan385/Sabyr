@@ -87,42 +87,86 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const dbUser = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
-        bonusLevel: true,
-        clubMembership: true,
-        bonusHistory: {
-          orderBy: { createdAt: "desc" },
-          take: 20,
-        },
-        addresses: {
-          orderBy: { isDefault: "desc" },
-        },
-        giftCards: {
-          where: { isActive: true },
-          orderBy: { createdAt: "desc" },
-        },
-        orders: {
-          include: {
-            address: true,
-            items: {
-              include: {
-                product: {
-                  include: {
-                    images: { orderBy: { order: "asc" }, take: 1 },
-                  },
+    const userInclude = {
+      bonusLevel: true,
+      clubMembership: true,
+      bonusHistory: {
+        orderBy: { createdAt: "desc" as const },
+        take: 20,
+      },
+      addresses: {
+        orderBy: { isDefault: "desc" as const },
+      },
+      giftCards: {
+        where: { isActive: true },
+        orderBy: { createdAt: "desc" as const },
+      },
+      orders: {
+        include: {
+          address: true,
+          items: {
+            include: {
+              product: {
+                include: {
+                  images: { orderBy: { order: "asc" as const }, take: 1 },
                 },
               },
             },
           },
-          orderBy: { createdAt: "desc" },
         },
+        orderBy: { createdAt: "desc" as const },
       },
+    };
+
+    let dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: userInclude,
     });
 
+    if (!dbUser && (session.user.email || session.user.phone)) {
+      const orConditions: Array<Record<string, unknown>> = [];
+      if (session.user.email) {
+        orConditions.push({ email: { equals: session.user.email, mode: "insensitive" } });
+      }
+      if (session.user.phone) {
+        orConditions.push({ phone: session.user.phone });
+      }
+      if (orConditions.length > 0) {
+        dbUser = await prisma.user.findFirst({
+          where: { OR: orConditions },
+          include: userInclude,
+        });
+      }
+    }
+
     if (!dbUser) {
-      return NextResponse.json({ authenticated: false, user: null });
+      return NextResponse.json({
+        authenticated: true,
+        user: {
+          id: session.user.id,
+          name: session.user.name,
+          phone: session.user.phone || "",
+          email: session.user.email || "",
+          role: session.user.role,
+          bonusBalance: session.user.bonusBalance,
+          bonusLevel: {
+            name: session.user.bonusLevel || "Новый клиент",
+            percent: 3,
+            currentPurchases: 0,
+            nextLevelAt: 100000,
+            privileges: ["Кешбэк 3% бонусами", "Бесплатная доставка от 30 000 ₸"],
+          },
+          clubMembership: {
+            isActive: session.user.isClubMember,
+            tier: session.user.isClubMember ? "SABYR BLACK VIP" : "Нет членства",
+            validUntil: session.user.isClubMember ? "Бессрочно" : "",
+          },
+          bonusHistory: [],
+          orders: [],
+          addresses: [],
+          giftCards: [],
+        },
+      });
     }
 
     const allLevels = await prisma.bonusLevel.findMany({

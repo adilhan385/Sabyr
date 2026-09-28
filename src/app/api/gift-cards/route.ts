@@ -5,9 +5,13 @@ import { getSession } from "@/lib/auth";
 import { toTiyn, toKzt } from "@/lib/utils";
 
 const CreateGiftCardSchema = z.object({
-  amount: z.number().int().min(10000, "Минимальный номинал 10 000 ₸").max(2000000),
-  recipientName: z.string().min(1, "Укажите имя получателя").max(100),
-  recipientEmail: z.string().email("Некорректный email получателя"),
+  amount: z.number().int().min(1000, "Минимальный номинал 1 000 ₸").max(5000000),
+  recipientName: z.string().max(100).optional().default("Клиент SABYR"),
+  recipientEmail: z
+    .string()
+    .email("Некорректный email получателя")
+    .optional()
+    .or(z.literal("")),
   senderName: z.string().max(100).optional(),
   greetingMessage: z.string().max(500).optional(),
 });
@@ -26,7 +30,7 @@ export async function GET() {
       const cards = await prisma.giftCard.findMany({
         include: { owner: true },
         orderBy: { createdAt: "desc" },
-        take: 50,
+        take: 100,
       });
       return NextResponse.json({
         success: true,
@@ -66,11 +70,14 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const parsed = CreateGiftCardSchema.safeParse(body);
+    const parsed = CreateGiftCardSchema.safeParse({
+      ...body,
+      amount: Number(body?.amount),
+    });
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: "Проверьте номинал и данные получателя" },
+        { success: false, error: "Проверьте номинал сертификата" },
         { status: 400 }
       );
     }
@@ -85,19 +92,30 @@ export async function POST(req: NextRequest) {
     const dbUp = await isDatabaseAvailable();
     if (dbUp) {
       try {
+        let validOwnerId: string | null = null;
+        if (session?.user.id) {
+          const existingOwner = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { id: true },
+          });
+          if (existingOwner) {
+            validOwnerId = existingOwner.id;
+          }
+        }
+
         const created = await prisma.giftCard.create({
           data: {
             code,
             amount: amountTiyn,
             balance: amountTiyn,
-            ownerId: session?.user.id || null,
+            ownerId: validOwnerId,
             expiresAt,
             isActive: true,
           },
         });
 
         console.info(
-          `[SABYR GiftCard] Created gift card ${created.code} (${amount} KZT) for ${recipientName} <${recipientEmail}>`
+          `[SABYR GiftCard] Created gift card ${created.code} (${amount} KZT) for ${recipientName || "Admin"} <${recipientEmail || ""}>`
         );
 
         return NextResponse.json({
@@ -107,6 +125,7 @@ export async function POST(req: NextRequest) {
             code: created.code,
             amount: toKzt(created.amount),
             balance: toKzt(created.balance),
+            isActive: true,
             expiresAt: created.expiresAt?.toLocaleDateString("ru-RU") || "12 месяцев",
           },
         });
@@ -122,6 +141,7 @@ export async function POST(req: NextRequest) {
         code,
         amount,
         balance: amount,
+        isActive: true,
         expiresAt: expiresAt.toLocaleDateString("ru-RU"),
       },
     });

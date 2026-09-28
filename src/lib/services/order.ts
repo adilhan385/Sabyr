@@ -39,6 +39,7 @@ export interface CustomerInput {
 }
 
 export interface CreateOrderInput {
+  userId?: string;
   customer: CustomerInput;
   items: CreateOrderItemInput[];
   deliveryType: "COURIER" | "PICKUP" | "POSTAL";
@@ -91,19 +92,40 @@ export class OrderService {
     if (isDbUp) {
       try {
         const result = await prisma.$transaction(async (tx) => {
-          // 1. Upsert customer user by canonical KZ phone
-          let user = await tx.user.findUnique({
-            where: { phone: formattedPhone },
-          });
+          // 1. Resolve customer user by session userId, canonical KZ phone, or email
+          let user = input.userId
+            ? await tx.user.findUnique({ where: { id: input.userId } })
+            : null;
 
           if (!user) {
+            user = await tx.user.findUnique({
+              where: { phone: formattedPhone },
+            });
+          }
+
+          const cleanEmail = input.customer.email?.trim().toLowerCase() || null;
+          if (!user && cleanEmail) {
+            user = await tx.user.findFirst({
+              where: { email: { equals: cleanEmail, mode: "insensitive" } },
+            });
+          }
+
+          if (!user) {
+            const starterLevel = await tx.bonusLevel.findFirst({
+              orderBy: { minPurchaseAmount: "asc" },
+            });
             user = await tx.user.create({
               data: {
                 phone: formattedPhone,
                 name: input.customer.name || "Покупатель",
-                email: input.customer.email || null,
-                bonusLevelId: "bl-1",
+                email: cleanEmail,
+                bonusLevelId: starterLevel?.id || null,
               },
+            });
+          } else if (input.customer.name && (!user.name || user.name === "Клиент SABYR" || user.name === "Покупатель")) {
+            user = await tx.user.update({
+              where: { id: user.id },
+              data: { name: input.customer.name },
             });
           }
 
@@ -189,6 +211,7 @@ export class OrderService {
 
           // 6. Create OrderItems & decrement variant stock where available
           for (const item of input.items) {
+            let validProductId = item.productId;
             let validVariantId: string | null = null;
 
             if (item.variantId) {
@@ -197,36 +220,73 @@ export class OrderService {
               });
               if (existingVariant) {
                 validVariantId = existingVariant.id;
+                validProductId = existingVariant.productId;
               }
             }
 
             if (!validVariantId) {
               const fallbackVariant = await tx.productVariant.findFirst({
-                where: { productId: item.productId },
+                where: { productId: validProductId },
               });
               if (fallbackVariant) {
                 validVariantId = fallbackVariant.id;
               }
             }
 
-            if (validVariantId) {
-              await tx.orderItem.create({
+            // If product or variant is still missing in DB, auto-create it so OrderItem is never dropped
+            if (!validVariantId) {
+              let existingProd = await tx.product.findUnique({
+                where: { id: validProductId },
+              });
+              if (!existingProd) {
+                let firstCat = await tx.category.findFirst();
+                if (!firstCat) {
+                  firstCat = await tx.category.create({
+                    data: { id: "cat-1", name: "Верхняя одежда", slug: "outerwear" },
+                  });
+                }
+                existingProd = await tx.product.create({
+                  data: {
+                    id: validProductId,
+                    name: item.name,
+                    slug: `${validProductId}-${Date.now()}`,
+                    description: item.name,
+                    price: toTiyn(item.price),
+                    categoryId: firstCat.id,
+                    isActive: true,
+                  },
+                });
+              }
+              const createdVariant = await tx.productVariant.create({
                 data: {
-                  orderId: order.id,
-                  productId: item.productId,
-                  variantId: validVariantId,
-                  price: toTiyn(item.price),
-                  quantity: item.quantity,
-                  color: item.color,
-                  size: item.size,
+                  productId: existingProd.id,
+                  size: item.size || "M",
+                  color: item.color || "Чёрный",
+                  colorHex: "#0D0D0D",
+                  stock: 20,
+                  sku: `SBR-${existingProd.id.slice(-4)}-${item.size || "M"}-${Date.now().toString().slice(-4)}`,
                 },
               });
-
-              await tx.productVariant.updateMany({
-                where: { id: validVariantId, stock: { gte: item.quantity } },
-                data: { stock: { decrement: item.quantity } },
-              });
+              validVariantId = createdVariant.id;
+              validProductId = existingProd.id;
             }
+
+            await tx.orderItem.create({
+              data: {
+                orderId: order.id,
+                productId: validProductId,
+                variantId: validVariantId,
+                price: toTiyn(item.price),
+                quantity: item.quantity,
+                color: item.color,
+                size: item.size,
+              },
+            });
+
+            await tx.productVariant.updateMany({
+              where: { id: validVariantId, stock: { gte: item.quantity } },
+              data: { stock: { decrement: item.quantity } },
+            });
           }
 
           // 7. Process loyalty bonuses, tier upgrades & SABYR CLUB auto-join

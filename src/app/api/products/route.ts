@@ -266,66 +266,106 @@ export async function PATCH(req: NextRequest) {
     if (isBestSeller !== undefined) updates.isBestSeller = isBestSeller;
 
     // Update local store
-    updateProductInDb(id, updates);
+    const updatedLocalProd = updateProductInDb(id, updates);
 
     // Update PostgreSQL if available
     const isDbUp = await isDatabaseAvailable();
     if (isDbUp) {
       try {
         let categoryId: string | undefined;
-        if (category) {
+        const targetCategoryName = category || updatedLocalProd?.category;
+        if (targetCategoryName) {
           let categoryRecord = await prisma.category.findFirst({
-            where: { name: category },
+            where: { name: targetCategoryName },
           });
           if (!categoryRecord) {
             categoryRecord = await prisma.category.create({
               data: {
-                name: category,
-                slug: `${category.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
+                name: targetCategoryName,
+                slug: `${targetCategoryName.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
               },
             });
           }
           categoryId = categoryRecord.id;
         }
 
-        await prisma.product.update({
-          where: { id },
-          data: {
-            ...(name !== undefined ? { name } : {}),
-            ...(categoryId !== undefined ? { categoryId } : {}),
-            ...(price !== undefined ? { price: toTiyn(price) } : {}),
-            ...(comparePrice !== undefined
-              ? { comparePrice: comparePrice ? toTiyn(comparePrice) : null }
-              : {}),
-            ...(description !== undefined ? { description } : {}),
-            ...(composition !== undefined ? { composition } : {}),
-            ...(care !== undefined ? { care } : {}),
-            ...(isClubOnly !== undefined ? { isClubOnly } : {}),
-            ...(isNew !== undefined ? { isNew } : {}),
-            ...(isBestSeller !== undefined ? { isBestSeller } : {}),
-            ...(images !== undefined && images.length > 0
-              ? {
-                  images: {
-                    deleteMany: {},
-                    create: images.map((url, i) => ({ url, order: i })),
-                  },
-                }
-              : {}),
-            ...(updates.variants !== undefined
-              ? {
-                  variants: {
-                    deleteMany: {},
-                    create: updates.variants.map((v) => ({
-                      color: v.color,
-                      colorHex: v.colorHex,
-                      size: v.size,
-                      stock: v.stock,
-                    })),
-                  },
-                }
-              : {}),
-          },
-        });
+        const existingInDb = await prisma.product.findUnique({ where: { id } });
+        if (existingInDb) {
+          await prisma.product.update({
+            where: { id },
+            data: {
+              ...(name !== undefined ? { name } : {}),
+              ...(category !== undefined && categoryId !== undefined ? { categoryId } : {}),
+              ...(price !== undefined ? { price: toTiyn(price) } : {}),
+              ...(comparePrice !== undefined
+                ? { comparePrice: comparePrice ? toTiyn(comparePrice) : null }
+                : {}),
+              ...(description !== undefined ? { description } : {}),
+              ...(composition !== undefined ? { composition } : {}),
+              ...(care !== undefined ? { care } : {}),
+              ...(isClubOnly !== undefined ? { isClubOnly } : {}),
+              ...(isNew !== undefined ? { isNew } : {}),
+              ...(isBestSeller !== undefined ? { isBestSeller } : {}),
+              ...(images !== undefined && images.length > 0
+                ? {
+                    images: {
+                      deleteMany: {},
+                      create: images.map((url, i) => ({ url, order: i })),
+                    },
+                  }
+                : {}),
+              ...(updates.variants !== undefined
+                ? {
+                    variants: {
+                      deleteMany: {},
+                      create: updates.variants.map((v) => ({
+                        color: v.color,
+                        colorHex: v.colorHex,
+                        size: v.size,
+                        stock: v.stock,
+                      })),
+                    },
+                  }
+                : {}),
+            },
+          });
+        } else if (updatedLocalProd && categoryId) {
+          await prisma.product.create({
+            data: {
+              id: updatedLocalProd.id,
+              name: updatedLocalProd.name,
+              slug: `${updatedLocalProd.slug}-${Date.now()}`,
+              price: toTiyn(updatedLocalProd.price),
+              comparePrice: updatedLocalProd.comparePrice
+                ? toTiyn(updatedLocalProd.comparePrice)
+                : null,
+              description: updatedLocalProd.description,
+              composition: updatedLocalProd.composition,
+              care: updatedLocalProd.care,
+              categoryId,
+              isNew: updatedLocalProd.isNew ?? true,
+              isBestSeller: updatedLocalProd.isBestSeller ?? false,
+              isClubOnly: updatedLocalProd.isClubOnly ?? false,
+              aiDescription: updatedLocalProd.aiDescription || "",
+              occasionTags: updatedLocalProd.occasionTags || [],
+              styleTags: updatedLocalProd.styleTags || [],
+              images: {
+                create: (updatedLocalProd.images || ["/products/1-1.jpg"]).map((url, i) => ({
+                  url,
+                  order: i,
+                })),
+              },
+              variants: {
+                create: (updatedLocalProd.variants || []).map((v) => ({
+                  color: v.color,
+                  colorHex: v.colorHex || "#0D0D0D",
+                  size: v.size,
+                  stock: v.stock,
+                })),
+              },
+            },
+          });
+        }
       } catch (dbErr: unknown) {
         console.warn("[SABYR API] Error updating product in DB:", dbErr);
       }

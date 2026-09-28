@@ -8,7 +8,7 @@ import { requireAdmin } from "@/lib/auth";
 const CreatePromoSchema = z.object({
   code: z
     .string()
-    .min(3, "Код должен содержать не менее 3 символов")
+    .min(2, "Код должен содержать не менее 2 символов")
     .max(50)
     .transform((s) => s.trim().toUpperCase()),
   type: z.enum(["PERCENTAGE", "FIXED"]).default("PERCENTAGE"),
@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
   if (isDbUp) {
     try {
       const dbPromos = await prisma.promoCode.findMany({
+        where: { isActive: true },
         orderBy: { createdAt: "desc" },
       });
       return NextResponse.json({
@@ -76,29 +77,44 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const parsed = CreatePromoSchema.safeParse(body);
+    const parsed = CreatePromoSchema.safeParse({
+      ...body,
+      value: Number(body?.value),
+    });
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: "Ошибка валидации", details: parsed.error.flatten() },
+        { success: false, error: "Ошибка валидации промокода", details: parsed.error.flatten() },
         { status: 400 }
       );
     }
 
     const { code, type, value, maxUses, minOrderAmount, expiresAt } = parsed.data;
+    const storedValue = type === "PERCENTAGE" ? value : value * 100;
 
     const isDbUp = await isDatabaseAvailable();
     if (isDbUp) {
       try {
-        const created = await prisma.promoCode.create({
-          data: {
-            code,
+        const created = await prisma.promoCode.upsert({
+          where: { code },
+          update: {
             type,
-            value: type === "PERCENTAGE" ? value : value * 100, // store FIXED in tiyn
+            value: storedValue,
             maxUses: maxUses || null,
-            minOrderAmount: minOrderAmount ? minOrderAmount * 100 : null,
+            minOrderAmount: minOrderAmount ? minOrderAmount * 100 : 0,
             expiresAt: expiresAt ? new Date(expiresAt) : null,
             isActive: true,
+          },
+          create: {
+            code,
+            type,
+            value: storedValue,
+            maxUses: maxUses || null,
+            minOrderAmount: minOrderAmount ? minOrderAmount * 100 : 0,
+            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            isActive: true,
+            categoryIds: [],
+            productIds: [],
           },
         });
 
@@ -107,7 +123,10 @@ export async function POST(req: NextRequest) {
           promo: {
             id: created.id,
             code: created.code,
-            discount: created.type === "PERCENTAGE" ? `${created.value}%` : `${Math.round(created.value / 100)} ₸`,
+            discount:
+              created.type === "PERCENTAGE"
+                ? `${created.value}%`
+                : `${Math.round(created.value / 100)} ₸`,
             type: created.type,
             uses: created.usedCount,
             maxUses: created.maxUses,

@@ -14,15 +14,32 @@ export interface CartItem {
   slug: string;
 }
 
+export interface AppliedPromo {
+  code: string;
+  discountAmount: number;
+  description: string;
+}
+
+export interface AppliedGiftCard {
+  code: string;
+  amount: number;
+}
+
 interface CartStore {
   items: CartItem[];
   isOpen: boolean;
+  appliedPromo: AppliedPromo | null;
+  appliedGiftCard: AppliedGiftCard | null;
+  bonusesUsed: number;
 
   // Actions
   addItem: (item: CartItem) => void;
   removeItem: (variantId: string) => void;
   updateQuantity: (variantId: string, quantity: number) => void;
   updateSize: (variantId: string, newVariantId: string, newSize: string) => void;
+  setAppliedPromo: (promo: AppliedPromo | null) => void;
+  setAppliedGiftCard: (gc: AppliedGiftCard | null) => void;
+  setBonusesUsed: (bonuses: number) => void;
   clearCart: () => void;
   toggleCart: () => void;
   openCart: () => void;
@@ -38,6 +55,9 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       items: [],
       isOpen: false,
+      appliedPromo: null,
+      appliedGiftCard: null,
+      bonusesUsed: 0,
 
       addItem: (newItem) => {
         set((state) => {
@@ -86,7 +106,17 @@ export const useCartStore = create<CartStore>()(
         }));
       },
 
-      clearCart: () => set({ items: [] }),
+      setAppliedPromo: (appliedPromo) => set({ appliedPromo }),
+      setAppliedGiftCard: (appliedGiftCard) => set({ appliedGiftCard }),
+      setBonusesUsed: (bonusesUsed) => set({ bonusesUsed }),
+
+      clearCart: () =>
+        set({
+          items: [],
+          appliedPromo: null,
+          appliedGiftCard: null,
+          bonusesUsed: 0,
+        }),
       toggleCart: () => set((state) => ({ isOpen: !state.isOpen })),
       openCart: () => set({ isOpen: true }),
       closeCart: () => set({ isOpen: false }),
@@ -96,7 +126,12 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name: "sabyr-cart",
-      partialize: (state) => ({ items: state.items }),
+      partialize: (state) => ({
+        items: state.items,
+        appliedPromo: state.appliedPromo,
+        appliedGiftCard: state.appliedGiftCard,
+        bonusesUsed: state.bonusesUsed,
+      }),
     }
   )
 );

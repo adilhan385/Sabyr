@@ -10,16 +10,25 @@ import { useCartStore } from "@/store/cart";
 import { useSabySession } from "@/hooks/useSabySession";
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, totalItems, totalPrice } = useCartStore();
+  const {
+    items,
+    removeItem,
+    updateQuantity,
+    totalItems,
+    totalPrice,
+    appliedPromo: promoApplied,
+    setAppliedPromo: setPromoApplied,
+    appliedGiftCard: certApplied,
+    setAppliedGiftCard: setCertApplied,
+    bonusesUsed,
+    setBonusesUsed,
+  } = useCartStore();
   const { user } = useSabySession();
 
   const [promoCode, setPromoCode] = useState("");
-  const [promoApplied, setPromoApplied] = useState<{ code: string; discountAmount: number; description: string } | null>(null);
   const [promoError, setPromoError] = useState("");
   const [certificate, setCertificate] = useState("");
-  const [certApplied, setCertApplied] = useState<{ code: string; amount: number } | null>(null);
   const [certError, setCertError] = useState("");
-  const [bonusesUsed, setBonusesUsed] = useState(0);
 
   const userBonuses = user.bonusBalance;
   const subtotal = totalPrice();

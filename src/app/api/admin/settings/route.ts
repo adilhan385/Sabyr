@@ -44,7 +44,7 @@ const SettingsPayloadSchema = z.object({
   bonusLevels: z
     .array(
       z.object({
-        id: z.string(),
+        id: z.string().optional(),
         name: z.string().min(1),
         minSpend: z.number().min(0),
         percent: z.number().min(0).max(100),
@@ -123,16 +123,18 @@ export async function POST(req: NextRequest) {
       const { scope, entries, bonusLevels } = parsed.data;
 
       if (scope === "bonus" && Array.isArray(bonusLevels)) {
-        for (const lvl of bonusLevels) {
+        for (let i = 0; i < bonusLevels.length; i++) {
+          const lvl = bonusLevels[i];
+          const lvlId = lvl.id || `bl-${i + 1}`;
           await prisma.bonusLevel.upsert({
-            where: { id: lvl.id },
+            where: { id: lvlId },
             update: {
               name: lvl.name,
               minPurchaseAmount: toTiyn(lvl.minSpend),
               bonusPercent: lvl.percent,
             },
             create: {
-              id: lvl.id,
+              id: lvlId,
               name: lvl.name,
               minPurchaseAmount: toTiyn(lvl.minSpend),
               bonusPercent: lvl.percent,

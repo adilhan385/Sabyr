@@ -699,13 +699,13 @@ export default function AdminPage() {
 
   const handleCreatePromo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPromoCode) return;
+    if (!newPromoCode.trim()) return;
     try {
       const res = await fetch("/api/promo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: newPromoCode,
+          code: newPromoCode.trim().toUpperCase(),
           type: "PERCENTAGE",
           value: Number(newPromoDiscount),
           maxUses: 200,
@@ -713,20 +713,31 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (data.success && data.promo) {
-        setPromosList([data.promo, ...promosList]);
+        setPromosList((prev) => [
+          data.promo,
+          ...prev.filter((p) => p.id !== data.promo.id && p.code !== data.promo.code),
+        ]);
         setNewPromoCode("");
-        showToast(`Промокод ${data.promo.code} создан`);
+        showToast(`Промокод ${data.promo.code} (-${data.promo.value}%) сохранён`);
+      } else {
+        showToast(data.error || "Ошибка создания промокода");
       }
     } catch (err) {
       console.error("Error creating promo:", err);
+      showToast("Ошибка сети при создании промокода");
     }
   };
 
   const handleDeletePromo = async (promoId: string) => {
     try {
-      await fetch(`/api/promo?id=${promoId}`, { method: "DELETE" });
-      setPromosList(promosList.filter((p) => p.id !== promoId));
-      showToast("Промокод деактивирован");
+      const res = await fetch(`/api/promo?id=${encodeURIComponent(promoId)}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        setPromosList((prev) => prev.filter((p) => p.id !== promoId));
+        showToast("Промокод удалён");
+      } else {
+        showToast(data.error || "Ошибка удаления промокода");
+      }
     } catch (err) {
       console.error("Error deleting promo:", err);
     }
@@ -741,12 +752,29 @@ export default function AdminPage() {
         body: JSON.stringify({ amount: Number(newGiftAmount) }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.giftCard) {
+        setGiftCardsList((prev) => [
+          {
+            id: data.giftCard.id,
+            code: data.giftCard.code,
+            amount: data.giftCard.amount,
+            balance: data.giftCard.balance,
+            owner: "Без привязки",
+            phone: "",
+            isActive: true,
+            expiresAt: data.giftCard.expiresAt
+              ? new Date(data.giftCard.expiresAt).toLocaleDateString("ru-RU")
+              : "Бессрочно",
+          },
+          ...prev,
+        ]);
         loadGiftCards();
         showToast(`Сертификат ${data.giftCard.code} выпущен`);
+      } else {
+        showToast(data.error || "Ошибка выпуска сертификата");
       }
     } catch {
-      // ignore
+      showToast("Ошибка сети при выпуске сертификата");
     }
   };
 
@@ -876,6 +904,7 @@ export default function AdminPage() {
 
   const handleSaveCategory = async (catId: string) => {
     if (!editingCategoryName.trim()) return;
+    const oldCat = categoriesList.find((c) => c.id === catId);
     setCategorySaving(true);
     try {
       const res = await fetch("/api/categories", {
@@ -886,10 +915,19 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.success && data.category) {
         setCategoriesList((prev) =>
-          prev.map((c) => (c.id === catId ? data.category : c))
+          prev.map((c) => (c.id === catId ? { ...c, ...data.category } : c))
         );
+        if (oldCat && oldCat.name !== data.category.name) {
+          setProductsList((prev) =>
+            prev.map((p) =>
+              p.category === oldCat.name ? { ...p, category: data.category.name } : p
+            )
+          );
+        }
         setEditingCategoryId(null);
         showToast(`Категория переименована в «${data.category.name}»`);
+      } else {
+        showToast(data.error || "Ошибка переименования категории");
       }
     } catch {
       showToast("Ошибка сети");
@@ -899,7 +937,6 @@ export default function AdminPage() {
   };
 
   const handleDeleteCategory = async (catId: string, catName: string) => {
-    if (!confirm(`Удалить категорию «${catName}»? Это не удалит товары в ней.`)) return;
     try {
       const res = await fetch(`/api/categories?id=${encodeURIComponent(catId)}`, { method: "DELETE" });
       const data = await res.json();

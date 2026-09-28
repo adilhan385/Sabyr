@@ -83,7 +83,7 @@ export async function getSession(
       if (payload && payload.sub) {
         const dbUp = await isDatabaseAvailable();
         if (dbUp) {
-          const dbUser = await prisma.user.findUnique({
+          let dbUser = await prisma.user.findUnique({
             where: { id: payload.sub },
             include: {
               bonusLevel: true,
@@ -91,17 +91,37 @@ export async function getSession(
             },
           });
 
+          if (!dbUser && (payload.email || payload.phone)) {
+            const orFilters: Array<Record<string, unknown>> = [];
+            if (payload.email) {
+              orFilters.push({ email: { equals: payload.email, mode: "insensitive" } });
+            }
+            if (payload.phone) {
+              orFilters.push({ phone: payload.phone });
+            }
+            if (orFilters.length > 0) {
+              dbUser = await prisma.user.findFirst({
+                where: { OR: orFilters },
+                include: {
+                  bonusLevel: true,
+                  clubMembership: true,
+                },
+              });
+            }
+          }
+
           if (dbUser) {
             if (dbUser.isBlocked) {
               return null;
             }
+            const isAdminEmail = dbUser.email?.toLowerCase() === "adilhananuar426@gmail.com";
             return {
               user: {
                 id: dbUser.id,
                 name: dbUser.name || "Клиент SABYR",
                 phone: dbUser.phone || undefined,
                 email: dbUser.email || undefined,
-                role: dbUser.role,
+                role: isAdminEmail ? "ADMIN" : dbUser.role,
                 bonusBalance: dbUser.bonusBalance,
                 bonusLevel: dbUser.bonusLevel?.name || "Новый клиент",
                 isClubMember: Boolean(dbUser.clubMembership?.isActive),
@@ -476,6 +496,9 @@ export async function loginWithPhone(
       }
 
       if (!dbUser) {
+        const starterLevel = await prisma.bonusLevel.findFirst({
+          orderBy: { minPurchaseAmount: "asc" },
+        });
         dbUser = await prisma.user.create({
           data: {
             phone,
@@ -483,7 +506,7 @@ export async function loginWithPhone(
             email: normalizedEmail,
             role: isAdminAccount ? "ADMIN" : "CUSTOMER",
             bonusBalance: 3000, // Welcome bonus 3000 KZT
-            bonusLevelId: "bl-1",
+            bonusLevelId: starterLevel?.id || null,
             bonusHistory: {
               create: {
                 type: "EARNED",

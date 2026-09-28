@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { OrderService } from "@/lib/services/order";
 import { prisma, isDatabaseAvailable } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, getSession } from "@/lib/auth";
 
 // ─── Zod Schemas ───────────────────────────────────────────────────────────────
-
-const KZ_PHONE_REGEX = /^(\+?7|8)[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/;
 
 const OrderItemSchema = z.object({
   productId: z.string().min(1).max(100),
@@ -20,9 +18,9 @@ const OrderItemSchema = z.object({
 });
 
 const CustomerSchema = z.object({
-  name: z.string().min(2).max(100).optional(),
-  phone: z.string().regex(KZ_PHONE_REGEX, "Укажите корректный номер телефона (+7...)"),
-  email: z.string().email().optional(),
+  name: z.string().min(1).max(100).optional(),
+  phone: z.string().min(6, "Укажите корректный номер телефона (+7...)").max(30),
+  email: z.string().email().optional().or(z.literal("")),
   city: z.string().max(100).optional(),
   address: z.string().max(500).optional(),
 });
@@ -171,9 +169,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const session = await getSession(req);
+
     // Delegate execution to OrderService (atomic transaction & payment gateway setup)
     const result = await OrderService.createOrder({
-      customer,
+      userId: session?.user.id,
+      customer: {
+        ...customer,
+        email: customer.email?.trim() || session?.user.email || undefined,
+      },
       items,
       deliveryType,
       paymentMethod,

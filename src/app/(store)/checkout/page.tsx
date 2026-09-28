@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ShieldCheck, Truck, CreditCard, Sparkles, CheckCircle2, ArrowRight, ArrowLeft, Building2, MapPin } from "lucide-react";
 import { useCartStore } from "@/store/cart";
-import { formatPrice, generateOrderNumber } from "@/lib/utils";
+import { formatPrice } from "@/lib/utils";
 import { useSabySession } from "@/hooks/useSabySession";
 
 const CITIES = [
@@ -23,11 +23,25 @@ const CITIES = [
 ];
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart } = useCartStore();
-  const { user } = useSabySession();
+  const {
+    items,
+    totalPrice,
+    clearCart,
+    appliedPromo,
+    setAppliedPromo,
+    appliedGiftCard,
+    setAppliedGiftCard,
+    bonusesUsed,
+    setBonusesUsed,
+  } = useCartStore();
+  const { user, isGuest, refreshSession } = useSabySession();
 
   const [step, setStep] = useState<"checkout" | "success">("checkout");
   const [createdOrderNumber, setCreatedOrderNumber] = useState("");
+  const [orderFinalTotal, setOrderFinalTotal] = useState(0);
+  const [orderEarnedBonuses, setOrderEarnedBonuses] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   // Customer info (pre-filled from session when available)
   const [firstName, setFirstName] = useState(user.name.split(" ")[0] ?? "");
@@ -35,6 +49,16 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState(user.phone ?? "");
   const [email, setEmail] = useState(user.email ?? "");
   const [marketingConsent, setMarketingConsent] = useState(true);
+
+  useEffect(() => {
+    if (!isGuest && user) {
+      const parts = (user.name || "").trim().split(" ");
+      setFirstName((prev) => prev || parts[0] || "");
+      setLastName((prev) => prev || parts.slice(1).join(" ") || "");
+      setPhone((prev) => prev || user.phone || "");
+      setEmail((prev) => prev || user.email || "");
+    }
+  }, [isGuest, user]);
 
   // Delivery info
   const [deliveryType, setDeliveryType] = useState<"courier" | "boutique" | "post">("courier");
@@ -46,21 +70,50 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<"kaspi" | "card" | "cash">("kaspi");
 
   // Bonuses & Discounts
-  const [useBonuses, setUseBonuses] = useState(false);
-  // TODO (Phase 7): bonusBalance will come from real session once auth is wired
+  const [useBonuses, setUseBonuses] = useState(bonusesUsed > 0);
   const bonusBalance = user.bonusBalance;
 
   // Promo code
-  const [promoCode, setPromoCode] = useState("");
-  const [promoStatus, setPromoStatus] = useState<"idle" | "loading" | "valid" | "error">("idle");
-  const [promoDiscount, setPromoDiscount] = useState(0);
-  const [promoMessage, setPromoMessage] = useState("");
+  const [promoCode, setPromoCode] = useState(appliedPromo?.code ?? "");
+  const [promoStatus, setPromoStatus] = useState<"idle" | "loading" | "valid" | "error">(
+    appliedPromo ? "valid" : "idle"
+  );
+  const [promoDiscount, setPromoDiscount] = useState(appliedPromo?.discountAmount ?? 0);
+  const [promoMessage, setPromoMessage] = useState(appliedPromo?.description ?? "");
 
   // Gift card
-  const [giftCardCode, setGiftCardCode] = useState("");
-  const [giftCardStatus, setGiftCardStatus] = useState<"idle" | "loading" | "valid" | "error">("idle");
-  const [giftCardBalance, setGiftCardBalance] = useState(0);
-  const [giftCardMessage, setGiftCardMessage] = useState("");
+  const [giftCardCode, setGiftCardCode] = useState(appliedGiftCard?.code ?? "");
+  const [giftCardStatus, setGiftCardStatus] = useState<"idle" | "loading" | "valid" | "error">(
+    appliedGiftCard ? "valid" : "idle"
+  );
+  const [giftCardBalance, setGiftCardBalance] = useState(appliedGiftCard?.amount ?? 0);
+  const [giftCardMessage, setGiftCardMessage] = useState(
+    appliedGiftCard ? `Баланс сертификата: ${formatPrice(appliedGiftCard.amount)}` : ""
+  );
+
+  useEffect(() => {
+    if (appliedPromo && promoStatus === "idle") {
+      setPromoCode(appliedPromo.code);
+      setPromoDiscount(appliedPromo.discountAmount);
+      setPromoStatus("valid");
+      setPromoMessage(appliedPromo.description);
+    }
+  }, [appliedPromo, promoStatus]);
+
+  useEffect(() => {
+    if (appliedGiftCard && giftCardStatus === "idle") {
+      setGiftCardCode(appliedGiftCard.code);
+      setGiftCardBalance(appliedGiftCard.amount);
+      setGiftCardStatus("valid");
+      setGiftCardMessage(`Баланс сертификата: ${formatPrice(appliedGiftCard.amount)}`);
+    }
+  }, [appliedGiftCard, giftCardStatus]);
+
+  useEffect(() => {
+    if (bonusesUsed > 0) {
+      setUseBonuses(true);
+    }
+  }, [bonusesUsed]);
 
   const rawSubtotal = totalPrice();
   const deliveryCost = rawSubtotal > 30000 || deliveryType === "boutique" ? 0 : 1500;
@@ -91,10 +144,16 @@ export default function CheckoutPage() {
         setPromoDiscount(data.discountAmount);
         setPromoStatus("valid");
         setPromoMessage(data.description);
+        setAppliedPromo({
+          code: data.code,
+          discountAmount: data.discountAmount,
+          description: data.description,
+        });
       } else {
         setPromoDiscount(0);
         setPromoStatus("error");
         setPromoMessage(data.error ?? "Промокод не найден");
+        setAppliedPromo(null);
       }
     } catch {
       setPromoStatus("error");
@@ -117,10 +176,12 @@ export default function CheckoutPage() {
         setGiftCardBalance(data.balance);
         setGiftCardStatus("valid");
         setGiftCardMessage(`Баланс сертификата: ${formatPrice(data.balance)}`);
+        setAppliedGiftCard({ code: data.code, amount: data.balance });
       } else {
         setGiftCardBalance(0);
         setGiftCardStatus("error");
         setGiftCardMessage(data.error ?? "Сертификат не найден");
+        setAppliedGiftCard(null);
       }
     } catch {
       setGiftCardStatus("error");
@@ -130,6 +191,8 @@ export default function CheckoutPage() {
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError("");
+    setIsSubmitting(true);
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -137,10 +200,10 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           customer: {
             name: `${firstName} ${lastName}`.trim() || user.name || "Покупатель",
-            phone: phone || user.phone,
-            email: email || user.email || undefined,
+            phone: phone.trim() || user.phone,
+            email: email.trim() || user.email || undefined,
             city,
-            address: street,
+            address: deliveryType === "boutique" ? "Бутик SABYR" : street,
           },
           items: items.map((it) => ({
             productId: it.productId,
@@ -173,19 +236,26 @@ export default function CheckoutPage() {
           deliveryCost,
           total: finalTotal,
           notes: comments,
+          marketingConsent,
         }),
       });
       const data = await res.json();
-      if (data.success && data.orderNumber) {
-        setCreatedOrderNumber(data.orderNumber);
-      } else {
-        setCreatedOrderNumber(generateOrderNumber());
+      if (!res.ok || !data.success) {
+        setSubmitError(data.error || "Ошибка оформления заказа. Проверьте введённые данные.");
+        setIsSubmitting(false);
+        return;
       }
-    } catch {
-      setCreatedOrderNumber(generateOrderNumber());
-    } finally {
+      setCreatedOrderNumber(data.orderNumber);
+      setOrderFinalTotal(finalTotal);
+      setOrderEarnedBonuses(data.earnedBonuses ?? willEarnBonuses);
       setStep("success");
       clearCart();
+      setBonusesUsed(0);
+      await refreshSession();
+    } catch {
+      setSubmitError("Ошибка соединения с сервером. Попробуйте ещё раз.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -225,13 +295,13 @@ export default function CheckoutPage() {
             </div>
             <div className="flex items-baseline justify-between gap-3 pt-2 border-t border-border font-semibold text-sm">
               <span className="flex-shrink-0">Сумма к оплате:</span>
-              <span className="tabular-nums whitespace-nowrap flex-shrink-0">{formatPrice(finalTotal)}</span>
+              <span className="tabular-nums whitespace-nowrap flex-shrink-0">{formatPrice(orderFinalTotal)}</span>
             </div>
           </div>
 
           <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300 text-left">
             <Sparkles className="w-4 h-4 flex-shrink-0 text-amber-600" />
-            <span>Вам начислено <strong>+{willEarnBonuses} бонусов SABYR</strong> за эту покупку!</span>
+            <span>Вам начислено <strong>+{orderEarnedBonuses} бонусов SABYR</strong> за эту покупку!</span>
           </div>
 
           <div className="space-y-3 pt-2">
@@ -666,11 +736,18 @@ export default function CheckoutPage() {
                 <span className="text-2xl font-bold whitespace-nowrap tabular-nums">{formatPrice(finalTotal)}</span>
               </div>
 
+              {submitError && (
+                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">
+                  {submitError}
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="w-full h-12 bg-foreground text-background font-medium rounded-full text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-md"
+                disabled={isSubmitting}
+                className="w-full h-12 bg-foreground text-background font-medium rounded-full text-sm hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2 shadow-md"
               >
-                Подтвердить и оплатить заказ
+                {isSubmitting ? "Оформление заказа..." : "Подтвердить и оплатить заказ"}
                 <ArrowRight className="w-4 h-4" />
               </button>
 

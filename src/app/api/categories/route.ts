@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma, isDatabaseAvailable } from "@/lib/db";
+import { prisma, isDatabaseAvailable, getLastDbError } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { getStoredProducts, saveStoredProducts } from "@/lib/productsStore";
 import defaultCategories from "@/data/categories.json";
@@ -80,6 +80,7 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     source: "local",
+    dbError: getLastDbError(),
     categories: getLocalCategories(),
   });
 }

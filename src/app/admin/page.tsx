@@ -23,10 +23,14 @@ import {
   Upload,
   Lock,
   X,
+  Loader2,
+  ShieldAlert,
+  LogOut,
 } from "lucide-react";
 import { PRODUCTS, ProductItem } from "@/data/mockData";
 import { formatPrice } from "@/lib/utils";
 import { SabyrLogo } from "@/components/ui/SabyrLogo";
+import { useSabySession } from "@/hooks/useSabySession";
 
 type AdminTab =
   | "analytics"
@@ -43,6 +47,14 @@ type AdminTab =
 const ALL_AVAILABLE_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
 export default function AdminPage() {
+  const { user, isLoading: sessionLoading, isGuest, refreshSession, logout } = useSabySession();
+  const isAdmin = !isGuest && user.role === "ADMIN";
+
+  const [adminLoginId, setAdminLoginId] = useState("");
+  const [adminLoginPwd, setAdminLoginPwd] = useState("");
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
+  const [adminLoggingIn, setAdminLoggingIn] = useState(false);
+
   const [currentTab, setCurrentTab] = useState<AdminTab>("club");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -265,6 +277,8 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
+    if (!isAdmin) return;
+
     fetch("/api/products")
       .then((res) => res.json())
       .then((data) => {
@@ -333,7 +347,7 @@ export default function AdminPage() {
     loadNotifications();
     loadGiftCards();
     loadCategories();
-  }, []);
+  }, [isAdmin]);
 
   const filteredProducts = productsList.filter(
     (p) =>
@@ -902,6 +916,142 @@ export default function AdminPage() {
 
   const clubMembersCount = customersList.filter((c) => c.club).length;
   const clubProductsCount = productsList.filter((p) => p.isClubOnly).length;
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminLoginError(null);
+    if (!adminLoginId.trim() || !adminLoginPwd.trim()) {
+      setAdminLoginError("Введите логин и пароль администратора");
+      return;
+    }
+    setAdminLoggingIn(true);
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "password",
+          identifier: adminLoginId.trim(),
+          password: adminLoginPwd,
+          acceptedTerms: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAdminLoginError(data.error || "Неверный логин или пароль администратора");
+      } else if (data.user?.role !== "ADMIN") {
+        setAdminLoginError("У этого аккаунта нет прав администратора (только для владельца SABYR)");
+      } else {
+        await refreshSession();
+      }
+    } catch {
+      setAdminLoginError("Ошибка соединения с сервером");
+    } finally {
+      setAdminLoggingIn(false);
+    }
+  };
+
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen bg-secondary/30 flex items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="w-8 h-8 animate-spin" />
+          <p className="text-sm font-medium">Проверка прав доступа...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-secondary/30 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-background border border-border rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center mx-auto mb-3">
+              <ShieldAlert className="w-6 h-6 text-[hsl(var(--accent))]" />
+            </div>
+            <div className="flex justify-center mb-1">
+              <SabyrLogo className="h-4 w-auto" />
+            </div>
+            <h1 className="font-serif text-2xl font-normal tracking-tight">
+              Закрытая панель администратора
+            </h1>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Доступ к управлению сайтом SABYR разрешён только владельцу и администраторам.
+            </p>
+          </div>
+
+          {!isGuest && (
+            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 space-y-2">
+              <p>
+                Вы вошли как обычный покупатель (<strong>{user.email || user.phone || user.name}</strong>). У вашего аккаунта нет прав администратора.
+              </p>
+              <button
+                type="button"
+                onClick={() => logout()}
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold underline underline-offset-2"
+              >
+                <LogOut className="w-3 h-3" /> Выйти из клиентского аккаунта
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold block">
+                Логин администратора (Email или Телефон)
+              </label>
+              <input
+                type="text"
+                required
+                value={adminLoginId}
+                onChange={(e) => setAdminLoginId(e.target.value)}
+                placeholder="admin@sabyr.kz"
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold block">
+                Пароль администратора
+              </label>
+              <input
+                type="password"
+                required
+                value={adminLoginPwd}
+                onChange={(e) => setAdminLoginPwd(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-foreground"
+              />
+            </div>
+
+            {adminLoginError && (
+              <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 p-3 rounded-xl border border-red-200 dark:border-red-900">
+                {adminLoginError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={adminLoggingIn}
+              className="w-full py-3.5 bg-foreground text-background rounded-full text-xs font-semibold uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {adminLoggingIn ? "Проверка..." : "Войти как администратор"}
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-border text-center">
+            <Link
+              href="/"
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
+            >
+              ← Вернуться в магазин SABYR
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-secondary/30 flex flex-col">

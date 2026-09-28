@@ -535,17 +535,25 @@ export async function loginWithPassword(
   const normalizedEmail = isEmail ? cleanId.toLowerCase() : undefined;
   const pwdHash = hashPassword(password.trim());
 
+  const envAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const envAdminPwd = process.env.ADMIN_PASSWORD?.trim();
+
   const isAdminIdentifier =
     normalizedPhone === "+7 (777) 000-00-00" ||
-    normalizedEmail === "admin@sabyr.kz";
+    normalizedEmail === "admin@sabyr.kz" ||
+    Boolean(envAdminEmail && normalizedEmail === envAdminEmail);
+
   const isDefaultAdminPwd =
-    isAdminIdentifier && (password.trim() === "admin123" || password.trim() === "sabyr2026");
+    isAdminIdentifier &&
+    (password.trim() === "admin123" ||
+      password.trim() === "sabyr2026" ||
+      Boolean(envAdminPwd && password.trim() === envAdminPwd));
 
   const dbUp = await isDatabaseAvailable();
 
   if (dbUp) {
     try {
-      const dbUser = await prisma.user.findFirst({
+      let dbUser = await prisma.user.findFirst({
         where: isEmail
           ? { email: { equals: cleanId, mode: "insensitive" } }
           : { phone: normalizedPhone },
@@ -558,10 +566,31 @@ export async function loginWithPassword(
         },
       });
 
+      if (!dbUser && isAdminIdentifier && isDefaultAdminPwd) {
+        dbUser = await prisma.user.create({
+          data: {
+            phone: normalizedPhone || "+7 (777) 000-00-00",
+            email: normalizedEmail || "admin@sabyr.kz",
+            name: "Администратор SABYR",
+            role: "ADMIN",
+            bonusBalance: 50000,
+          },
+          include: {
+            bonusLevel: true,
+            clubMembership: true,
+            accounts: {
+              where: { provider: "credentials" },
+            },
+          },
+        });
+      }
+
       if (!dbUser) {
         return {
           success: false,
-          error: "Аккаунт не найден. Перейдите во вкладку «Регистрация», чтобы создать аккаунт.",
+          error: isAdminIdentifier
+            ? "Неверный пароль администратора"
+            : "Аккаунт не найден. Перейдите во вкладку «Регистрация», чтобы создать аккаунт.",
         };
       }
 
@@ -586,8 +615,12 @@ export async function loginWithPassword(
           };
         }
       } else {
-        // First password login for an existing account without a stored password:
-        // if admin, require admin123 or save their chosen password; for customer, save their password
+        if ((isAdminIdentifier || dbUser.role === "ADMIN") && !isDefaultAdminPwd) {
+          return {
+            success: false,
+            error: "Неверный пароль администратора",
+          };
+        }
         try {
           await prisma.account.create({
             data: {
@@ -601,6 +634,18 @@ export async function loginWithPassword(
         } catch {
           // ignore
         }
+      }
+
+      if (isAdminIdentifier && dbUser.role !== "ADMIN") {
+        dbUser = await prisma.user.update({
+          where: { id: dbUser.id },
+          data: { role: "ADMIN" },
+          include: {
+            bonusLevel: true,
+            clubMembership: true,
+            accounts: { where: { provider: "credentials" } },
+          },
+        });
       }
 
       const authUser: AuthUser = {
@@ -633,10 +678,13 @@ export async function loginWithPassword(
     (normalizedPhone ? memoryPasswords.get(normalizedPhone) : undefined) ||
     (normalizedEmail ? memoryPasswords.get(normalizedEmail) : undefined);
 
-  if (memHash && memHash !== pwdHash && !isDefaultAdminPwd) {
+  if (
+    (isAdminIdentifier && !isDefaultAdminPwd && memHash !== pwdHash) ||
+    (memHash && memHash !== pwdHash && !isDefaultAdminPwd)
+  ) {
     return {
       success: false,
-      error: "Неверный пароль",
+      error: "Неверный пароль администратора",
     };
   }
 

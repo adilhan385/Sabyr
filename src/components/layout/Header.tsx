@@ -442,14 +442,16 @@ export function Header() {
                     </Link>
                   );
                 })}
-                <Link
-                  href="/admin"
-                  onClick={() => setIsDrawerOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span>Панель управления (Admin)</span>
-                </Link>
+                {mounted && !isGuest && user.role === "ADMIN" && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setIsDrawerOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[hsl(var(--accent))] hover:bg-secondary transition-colors"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Панель управления (Admin)</span>
+                  </Link>
+                )}
               </div>
             </div>
 

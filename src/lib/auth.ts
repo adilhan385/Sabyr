@@ -188,11 +188,13 @@ export async function requireAdmin(req: NextRequest): Promise<{ user: AuthUser }
  * and dispatches it via Mobizon SMS (if `SMS_API_KEY` is set) and/or Resend Email (if `RESEND_API_KEY` is set).
  */
 const memoryOtps = new Map<string, { codeHash: string; expiresAt: number }>();
+const memoryEmailOwners = new Map<string, string>();
 
 export async function requestOtpCode(
   rawPhone: string,
   rawEmail?: string,
-  sendVia: "sms" | "email" | "both" = "both"
+  sendVia: "sms" | "email" | "both" = "both",
+  isRegister: boolean = false
 ): Promise<{
   success: boolean;
   phone: string;
@@ -207,34 +209,78 @@ export async function requestOtpCode(
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
   const sentVia_result: string[] = [];
 
-  memoryOtps.set(phone, { codeHash, expiresAt: expiresAt.getTime() });
+  let targetEmail = rawEmail?.trim().toLowerCase() || undefined;
 
-  let targetEmail = rawEmail?.trim() || undefined;
+  // In-memory duplicate check (also works when DB is offline)
+  if (targetEmail) {
+    const memOwnerPhone = memoryEmailOwners.get(targetEmail);
+    if (isRegister && (memOwnerPhone || targetEmail === "adilhananuar426@gmail.com")) {
+      throw new Error("Аккаунт с этим Email уже зарегистрирован. Перейдите во вкладку «Вход».");
+    }
+    if (memOwnerPhone && memOwnerPhone !== phone) {
+      throw new Error("Этот Email уже привязан к другому номеру телефона. Перейдите во вкладку «Вход».");
+    }
+  }
+  if (isRegister && memoryPasswords.has(phone)) {
+    throw new Error("Аккаунт с этим номером телефона уже зарегистрирован. Перейдите во вкладку «Вход».");
+  }
 
   const dbUp = await isDatabaseAvailable();
   if (dbUp) {
     try {
-      const existingUser = await prisma.user.findFirst({
+      const existingByPhone = await prisma.user.findFirst({
         where: { phone },
-        select: { email: true, isBlocked: true },
+        select: { id: true, email: true, isBlocked: true },
       });
-      if (existingUser?.isBlocked) {
+      if (existingByPhone?.isBlocked) {
         throw new Error("Ваш аккаунт заблокирован администратором SABYR");
       }
-      if (!targetEmail && existingUser?.email) {
-        targetEmail = existingUser.email;
+
+      const existingByEmail = targetEmail
+        ? await prisma.user.findFirst({
+            where: { email: { equals: targetEmail, mode: "insensitive" } },
+            select: { id: true, phone: true, isBlocked: true },
+          })
+        : null;
+
+      if (existingByEmail?.isBlocked) {
+        throw new Error("Ваш аккаунт заблокирован администратором SABYR");
+      }
+
+      if (isRegister) {
+        if (existingByEmail) {
+          throw new Error("Аккаунт с этим Email уже зарегистрирован. Перейдите во вкладку «Вход».");
+        }
+        if (existingByPhone) {
+          throw new Error("Аккаунт с этим номером телефона уже зарегистрирован. Перейдите во вкладку «Вход».");
+        }
+      } else {
+        if (existingByEmail && existingByEmail.phone && existingByEmail.phone !== phone) {
+          throw new Error("Этот Email уже привязан к другому аккаунту. Войдите по Email и паролю.");
+        }
+      }
+
+      if (!targetEmail && existingByPhone?.email) {
+        targetEmail = existingByPhone.email;
       }
 
       await prisma.otpVerification.create({
         data: { phone, codeHash, expiresAt },
       });
     } catch (err) {
-      if (err instanceof Error && err.message.includes("заблокирован")) {
+      if (
+        err instanceof Error &&
+        (err.message.includes("заблокирован") ||
+          err.message.includes("уже зарегистрирован") ||
+          err.message.includes("уже привязан"))
+      ) {
         throw err;
       }
       console.warn("[SABYR Auth] Failed to query/persist OTP in DB:", err);
     }
   }
+
+  memoryOtps.set(phone, { codeHash, expiresAt: expiresAt.getTime() });
 
   const shouldSendSms = sendVia === "sms" || sendVia === "both";
   const shouldSendEmail = sendVia === "email" || sendVia === "both";
@@ -316,7 +362,8 @@ export async function loginWithPhone(
   name?: string,
   email?: string,
   cookieCodeHash?: string,
-  password?: string
+  password?: string,
+  isRegister: boolean = false
 ): Promise<{
   success: boolean;
   error?: string;
@@ -325,6 +372,7 @@ export async function loginWithPhone(
 }> {
   const phone = formatKzPhone(rawPhone);
   const cleanCode = code.trim();
+  const normalizedEmail = email?.trim().toLowerCase() || undefined;
   const dbUp = await isDatabaseAvailable();
 
   const isSandboxBypass = !process.env.SMS_API_KEY && cleanCode === "1234";
@@ -378,16 +426,20 @@ export async function loginWithPhone(
     };
   }
 
-  const isAdminAccount =
-    phone === "+7 (777) 000-00-00" ||
-    email?.trim().toLowerCase() === "adilhananuar426@gmail.com";
-  const pwdHash = password?.trim() ? hashPassword(password.trim()) : undefined;
-  if (pwdHash) {
-    memoryPasswords.set(phone, pwdHash);
-    if (email?.trim()) {
-      memoryPasswords.set(email.trim().toLowerCase(), pwdHash);
+  if (normalizedEmail) {
+    const existingMemOwner = memoryEmailOwners.get(normalizedEmail);
+    if (existingMemOwner && existingMemOwner !== phone) {
+      return {
+        success: false,
+        error: "Этот Email уже зарегистрирован на другой номер телефона. Перейдите во вкладку «Вход».",
+      };
     }
   }
+
+  const isAdminAccount =
+    phone === "+7 (777) 000-00-00" ||
+    normalizedEmail === "adilhananuar426@gmail.com";
+  const pwdHash = password?.trim() ? hashPassword(password.trim()) : undefined;
 
   if (dbUp) {
     try {
@@ -403,16 +455,24 @@ export async function loginWithPhone(
         };
       }
 
-      const normalizedEmail = email?.trim() || undefined;
-      let safeEmailToSet = normalizedEmail;
       if (normalizedEmail) {
-        const emailOwner = await prisma.user.findUnique({
-          where: { email: normalizedEmail },
-          select: { id: true },
+        const emailOwner = await prisma.user.findFirst({
+          where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+          select: { id: true, phone: true },
         });
         if (emailOwner && emailOwner.id !== dbUser?.id) {
-          safeEmailToSet = undefined;
+          return {
+            success: false,
+            error: "Аккаунт с этим Email уже зарегистрирован. Перейдите во вкладку «Вход».",
+          };
         }
+      }
+
+      if (isRegister && dbUser) {
+        return {
+          success: false,
+          error: "Аккаунт с этим номером телефона уже зарегистрирован. Перейдите во вкладку «Вход».",
+        };
       }
 
       if (!dbUser) {
@@ -420,7 +480,7 @@ export async function loginWithPhone(
           data: {
             phone,
             name: name?.trim() || (isAdminAccount ? "Администратор SABYR" : "Клиент SABYR"),
-            email: safeEmailToSet,
+            email: normalizedEmail,
             role: isAdminAccount ? "ADMIN" : "CUSTOMER",
             bonusBalance: 3000, // Welcome bonus 3000 KZT
             bonusLevelId: "bl-1",
@@ -434,19 +494,26 @@ export async function loginWithPhone(
           },
           include: { bonusLevel: true, clubMembership: true },
         });
-      } else if (name?.trim() || safeEmailToSet || (isAdminAccount && dbUser.role !== "ADMIN")) {
+      } else if (name?.trim() || normalizedEmail || (isAdminAccount && dbUser.role !== "ADMIN")) {
         dbUser = await prisma.user.update({
           where: { id: dbUser.id },
           data: {
             ...(name?.trim() ? { name: name.trim() } : {}),
-            ...(safeEmailToSet ? { email: safeEmailToSet } : {}),
+            ...(normalizedEmail ? { email: normalizedEmail } : {}),
             ...(isAdminAccount ? { role: "ADMIN" } : {}),
           },
           include: { bonusLevel: true, clubMembership: true },
         });
       }
 
+      if (normalizedEmail) {
+        memoryEmailOwners.set(normalizedEmail, phone);
+      }
       if (pwdHash) {
+        memoryPasswords.set(phone, pwdHash);
+        if (normalizedEmail) {
+          memoryPasswords.set(normalizedEmail, pwdHash);
+        }
         try {
           await prisma.account.upsert({
             where: {
@@ -495,6 +562,16 @@ export async function loginWithPhone(
   }
 
   // Fallback when DB is offline or wrong DATABASE_URL is configured
+  if (normalizedEmail) {
+    memoryEmailOwners.set(normalizedEmail, phone);
+  }
+  if (pwdHash) {
+    memoryPasswords.set(phone, pwdHash);
+    if (normalizedEmail) {
+      memoryPasswords.set(normalizedEmail, pwdHash);
+    }
+  }
+
   const fallbackUser: AuthUser = {
     id: isAdminAccount ? "usr-admin-01" : `usr-${phone.replace(/\D/g, "")}`,
     name: name?.trim() || (isAdminAccount ? "Администратор SABYR" : "Клиент SABYR"),

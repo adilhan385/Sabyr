@@ -160,6 +160,7 @@ export default function AccountPage() {
           phone: loginPhone,
           email: loginEmail.trim(),
           sendVia,
+          isRegister: authTab === "register",
           acceptedTerms: true,
         }),
       });
@@ -204,6 +205,7 @@ export default function AccountPage() {
           name: loginName || undefined,
           email: loginEmail.trim(),
           password: loginPassword || undefined,
+          isRegister: authTab === "register",
           acceptedTerms: true,
         }),
       });

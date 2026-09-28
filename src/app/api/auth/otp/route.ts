@@ -10,6 +10,7 @@ const OtpRequestSchema = z.object({
     .max(25, "Слишком длинный номер"),
   email: z.string().email("Введите корректный email адрес"),
   sendVia: z.enum(["sms", "email"]).default("email"),
+  isRegister: z.boolean().optional().default(false),
   acceptedTerms: z.literal(true, {
     message: "Необходимо согласиться с Условиями использования",
   }),
@@ -54,7 +55,8 @@ export async function POST(req: NextRequest) {
     const result = await requestOtpCode(
       parsed.data.phone,
       parsed.data.email,
-      parsed.data.sendVia
+      parsed.data.sendVia,
+      parsed.data.isRegister
     );
 
     const res = NextResponse.json({

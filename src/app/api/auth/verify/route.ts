@@ -9,6 +9,7 @@ const VerifyOtpSchema = z.object({
   name: z.string().max(100).optional(),
   email: z.string().email("Введите корректный email адрес"),
   password: z.string().min(4).max(100).optional().or(z.literal("")),
+  isRegister: z.boolean().optional().default(false),
   acceptedTerms: z.literal(true, {
     message: "Необходимо согласиться с Условиями использования",
   }),
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { phone, code, name, email, password } = parsed.data;
+    const { phone, code, name, email, password, isRegister } = parsed.data;
     const cookieCodeHash = req.cookies.get("sabyr-otp-hash")?.value;
     const result = await loginWithPhone(
       phone,
@@ -104,7 +105,8 @@ export async function POST(req: NextRequest) {
       name,
       email || undefined,
       cookieCodeHash,
-      password || undefined
+      password || undefined,
+      isRegister
     );
 
     if (!result.success || !result.token || !result.user) {

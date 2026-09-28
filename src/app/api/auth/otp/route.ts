@@ -64,7 +64,6 @@ export async function POST(req: NextRequest) {
       phone: result.phone,
       email: result.email,
       sendVia: parsed.data.sendVia,
-      devCode: result.devCode,
       sentVia: result.sentVia,
       message:
         parsed.data.sendVia === "email"

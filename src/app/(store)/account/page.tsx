@@ -97,8 +97,6 @@ export default function AccountPage() {
     )
   );
 
-  const [devCodeHint, setDevCodeHint] = useState<string | null>(null);
-
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
@@ -138,7 +136,6 @@ export default function AccountPage() {
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    setDevCodeHint(null);
     if (!loginEmail.trim()) {
       setAuthError("Пожалуйста, укажите ваш Email (обязательное поле).");
       return;
@@ -174,9 +171,6 @@ export default function AccountPage() {
           via: sendVia,
           target: sendVia === "email" ? loginEmail.trim() : formattedPhone,
         });
-        if (data.devCode) {
-          setDevCodeHint(String(data.devCode));
-        }
         setOtpCode("");
         setOtpStep("code");
       }
@@ -618,13 +612,6 @@ export default function AccountPage() {
                     </div>
                     <p className="font-semibold">{otpSentTo?.target || loginEmail || loginPhone}</p>
                   </div>
-
-                  {devCodeHint && (
-                    <div className="p-3 rounded-xl border border-border bg-secondary/40 text-xs flex items-center justify-between">
-                      <span className="text-muted-foreground">Код подтверждения:</span>
-                      <span className="font-mono font-bold tracking-widest text-sm">{devCodeHint}</span>
-                    </div>
-                  )}
 
                   <div className="space-y-1.5">
                     <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">

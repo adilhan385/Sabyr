@@ -288,8 +288,6 @@ export async function requestOtpCode(
   }
 
   const isRealDeliveryActive = sentVia_result.length > 0;
-  const isResendSandbox =
-    !process.env.EMAIL_FROM || process.env.EMAIL_FROM.includes("onboarding@resend.dev");
   console.info(`[SABYR OTP] Код для ${phone}${targetEmail ? ` / ${targetEmail}` : ""}: ${randomCode} | via: ${sendVia}`);
 
   return {
@@ -298,7 +296,7 @@ export async function requestOtpCode(
     email: targetEmail,
     codeHash,
     sentVia: sentVia_result,
-    devCode: !isRealDeliveryActive || isResendSandbox ? randomCode : undefined,
+    devCode: !isRealDeliveryActive ? randomCode : undefined,
   };
 }
 
